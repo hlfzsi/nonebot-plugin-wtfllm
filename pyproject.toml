@@ -1,0 +1,83 @@
+[project]
+name = "nonebot_plugin_wtfllm"
+version = "0.0.1rc1"
+description = "nonebot_plugin_wtfllm"
+readme = "README.md"
+requires-python = ">=3.11, <4.0"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "aiosqlite>=0.22.1",
+    "httpx>=0.28.1",
+    "nonebot-plugin-alconna>=0.60.4",
+    "nonebot-plugin-localstore>=0.7.4",
+    "nonebot-plugin-uninfo>=0.10.1",
+    "nonebot2>=2.4.4",
+    "openai>=2.15.0",
+    "orjson>=3.11.5",
+    "pillow>=11.3.0",
+    "pydantic>=2.12.5",
+    "sqlmodel>=0.0.31",
+    "filetype>=1.2.0",
+    "nonebot-plugin-waiter>=0.8.1",
+    "cachetools>=6.2.5",
+    "trafilatura>=2.0.0",
+    "ddgs>=9.10.0",
+    "fake-useragent>=2.2.0",
+    "pybase64>=1.4.3",
+    "pillowmd>=0.7.3",
+    "apscheduler>=3.11.2",
+    "lxml>=6.0.2",
+    "nonebot-adapter-heybox>=0.1.1",
+    "nonebot-adapter-minecraft>=1.8.0",
+    "tiktoken>=0.12.0",
+    "makefun>=1.16.0",
+    "fastembed>=0.7.4",
+    "qdrant-client>=1.17.0",
+    "pydantic-ai>=1.62.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-asyncio>=0.24.0",
+    "types-lxml>=2026.1.1",
+    "hypothesis>=6.151.9",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["nonebot_plugin_wtfllm"]
+addopts = "--cov=nonebot_plugin_wtfllm --cov-report=term-missing"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "property: Property-based tests using Hypothesis",
+    "integration: Integration tests with real object graphs",
+    "slow: Tests that are slow (e.g. Qdrant with fastembed model download)",
+]
+filterwarnings = [
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore:.*is not a Python type.*:pydantic._internal._generate_schema.ArbitraryTypeWarning",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "def __repr__",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["nonebot_plugin_wtfllm"]
+
+[tool.setuptools.package-data]
+nonebot_plugin_wtfllm = ["resources/**/*"]
