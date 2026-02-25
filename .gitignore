@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+.claude/
 build/
 develop-eggs/
 dist/
@@ -205,3 +206,18 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# VS Code Local History
+.history/
+
+# VS Code workspace files
+*.code-workspace
+
+# Egg info
+*.egg-info/
+
+# uv lock (uncomment if needed)
+# uv.lock
+
+# Clean scripts
+clean_pyc.bat

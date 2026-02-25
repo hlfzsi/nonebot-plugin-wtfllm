@@ -10,6 +10,8 @@ __all__ = [
     "JSON_DIR",
     "SCHEDULED_MESSAGE_CACHE_DIR",
     "get_agent_id_from_bot",
+    "get_bot_by_agent_id",
+    "build_min_target",
     "ensure_msgid_from_receipt",
     "get_http_client",
     "init_http_client",
@@ -24,9 +26,10 @@ from typing import Final
 import httpx
 import tiktoken
 
-from nonebot import logger
+from nonebot import logger, get_bot, get_bots
 from nonebot.adapters import Bot
 from nonebot_plugin_uninfo import Session
+from nonebot_plugin_alconna import Target
 from nonebot_plugin_alconna.uniseg import Receipt
 from nonebot_plugin_localstore import get_plugin_data_dir, get_plugin_cache_dir
 
@@ -65,13 +68,38 @@ _paths = [
 for path in _paths:
     path.mkdir(parents=True, exist_ok=True)
 
+_bots_cache: dict[str, Bot] = {}
+
 
 def get_agent_id_from_bot(bot_or_session: Bot | Session) -> str:
     """从 Bot ID 中提取 Agent ID"""
-    if isinstance(bot_or_session, Session):
-        return bot_or_session.self_id.removeprefix("llonebot:").removeprefix("napcat:")
+    new_bot_id = bot_or_session.self_id.removeprefix("llonebot:").removeprefix(
+        "napcat:"
+    )
+    _bots_cache[new_bot_id] = get_bot(bot_or_session.self_id)
+    return new_bot_id
+
+
+def get_bot_by_agent_id(agent_id: str) -> Bot:
+    """根据 Agent ID 获取 Bot 实例"""
+    if agent_id in _bots_cache:
+        return _bots_cache[agent_id]
     else:
-        return bot_or_session.self_id.removeprefix("llonebot:").removeprefix("napcat:")
+        for bot in get_bots().values():
+            if get_agent_id_from_bot(bot) == agent_id:
+                return bot
+        raise ValueError(f"No bot found for agent_id: {agent_id}")
+
+
+def build_min_target(
+    agent_id: str | None, group_id: str | None = None, user_id: str | None = None
+) -> Target:
+    raw_bot_id = get_bot_by_agent_id(agent_id).self_id if agent_id is not None else None
+    if group_id:
+        return Target(id=group_id, private=False, self_id=raw_bot_id)
+    elif user_id:
+        return Target(id=user_id, private=True, self_id=raw_bot_id)
+    raise ValueError("Must provide one of group_id or user_id")
 
 
 def ensure_msgid_from_receipt(

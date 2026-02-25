@@ -1,4 +1,3 @@
-import time
 import asyncio
 from typing import Dict, List
 
@@ -58,7 +57,6 @@ async def handle(
         cached_aliases = get_alias_from_cache(bot, session)
 
         agent_id = get_agent_id_from_bot(session)
-        now_time = int(time.time())
         cached_aliases[agent_id] = APP_CONFIG.bot_name
         poi = attention_router.get_and_consume_poi(
             user_id=session.user.id,
@@ -77,9 +75,7 @@ async def handle(
             else ""
         )
         if poi:
-            suffix += (
-                f'<poi reason="{poi.reason}">最后一条消息来自你主动追踪的用户。</poi>'
-            )
+            suffix += f'<poi reason="{poi.reason}">最后一条消息来自你主动追踪的用户。剩余追踪轮数{poi.turns}</poi>'
 
         builder = MemoryContextBuilder(
             prefix_prompt=(
@@ -113,11 +109,9 @@ async def handle(
             # 群聊处理
             async with asyncio.TaskGroup() as tg:
                 current_group_items_task = tg.create_task(
-                    memory_item_repo.get_by_group_after(
+                    memory_item_repo.get_by_group(
                         group_id=session.group.id,
                         agent_id=agent_id,
-                        timestamp=now_time
-                        - (APP_CONFIG.short_memory_time_minutes * 60),
                         limit=APP_CONFIG.short_memory_max_count,
                     )
                 )
