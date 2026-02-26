@@ -110,6 +110,19 @@ class TestDetectPositiveAnomaly:
         )
         assert "02:00" in anomalies[0].reason
 
+    def test_consecutive_confirmation_for_positive(self):
+        curve = _make_curve(peak_range=(540, 660))
+        ts1 = _make_ts(120)
+        ts2 = _make_ts(125)
+        anomalies = detect_anomalies(
+            curve,
+            [ts1, ts2],
+            _UTC_OFFSET,
+            activity_flags=[True, True],
+            min_consecutive=2,
+        )
+        assert len(anomalies) == 2
+
 
 class TestDetectNegativeAnomaly:
     """负向异常：用户在活跃时段缺席。"""
@@ -133,6 +146,19 @@ class TestDetectNegativeAnomaly:
             curve, [ts], _UTC_OFFSET, activity_flags=[False]
         )
         assert len(anomalies) == 0
+
+    def test_consecutive_confirmation_for_negative(self):
+        curve = _make_curve(peak_range=(540, 660), peak_value=10.0)
+        ts1 = _make_ts(600)
+        ts2 = _make_ts(605)
+        anomalies = detect_anomalies(
+            curve,
+            [ts1, ts2],
+            _UTC_OFFSET,
+            activity_flags=[False, False],
+            min_consecutive=2,
+        )
+        assert len(anomalies) == 2
 
 
 class TestDetectMixed:
@@ -215,10 +241,9 @@ class TestFalseNegativeBias:
     """验证系统偏向假阴性（保守检测）。"""
 
     def test_borderline_not_flagged(self):
-        """上界刚好等于阈值 → 不报正向异常。"""
+        """设置极低 quiet 分位阈值时，边界上界不报异常。"""
         median = np.zeros(1440, dtype=np.float32)
         lower = np.zeros(1440, dtype=np.float32)
-        # 上界恰好 = 0.5（默认阈值）
         upper = np.full(1440, 0.5, dtype=np.float32)
 
         curve = ActivityCurve(
@@ -231,14 +256,19 @@ class TestFalseNegativeBias:
         )
         ts = _make_ts(120)
         anomalies = detect_anomalies(
-            curve, [ts], _UTC_OFFSET, activity_flags=[True]
+            curve,
+            [ts],
+            _UTC_OFFSET,
+            activity_flags=[True],
+            quiet_upper_quantile=0.01,
+            min_quiet_threshold=0.5,
         )
         assert len(anomalies) == 0  # 边界值不应报
 
     def test_borderline_absence_not_flagged(self):
-        """下界刚好低于活跃阈值 → 不报负向异常。"""
+        """高分位阈值下，低于阈值的下界不报缺席异常。"""
         median = np.full(1440, 1.0, dtype=np.float32)
-        lower = np.full(1440, 1.4, dtype=np.float32)  # < 1.5 默认阈值
+        lower = np.full(1440, 1.4, dtype=np.float32)
         upper = np.full(1440, 3.0, dtype=np.float32)
 
         curve = ActivityCurve(
@@ -251,6 +281,10 @@ class TestFalseNegativeBias:
         )
         ts = _make_ts(600)
         anomalies = detect_anomalies(
-            curve, [ts], _UTC_OFFSET, activity_flags=[False]
+            curve,
+            [ts],
+            _UTC_OFFSET,
+            activity_flags=[False],
+            active_lower_quantile=0.99,
         )
         assert len(anomalies) == 0

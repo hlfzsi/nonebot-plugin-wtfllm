@@ -10,14 +10,21 @@ from ._types import ActivityCurve, SessionKey
 _HARMONICS: tuple[int, ...] = (1, 2, 3, 4, 6, 12)
 
 _LGB_BASE_PARAMS: dict[str, object] = {
-    "num_leaves": 31,
-    "min_data_in_leaf": 5,
-    "learning_rate": 0.1,
+    "num_leaves": 15,
+    "min_data_in_leaf": 12,
+    "learning_rate": 0.05,
+    "feature_fraction": 0.9,
+    "bagging_fraction": 0.9,
+    "bagging_freq": 1,
+    "lambda_l2": 1.0,
     "num_threads": 1,
     "verbosity": -1,
 }
 
-_NUM_BOOST_ROUND = 100
+_NUM_BOOST_ROUND = 240
+_MIN_NONZERO_POINTS = 6
+_ZERO_SAMPLE_RATIO = 4
+_MAX_ZERO_SAMPLES = 1200
 
 _FULL_FEATURES: NDArray[np.float64] | None = None
 
@@ -101,7 +108,7 @@ def fit_activity_curve(
     nonzero_mask = bins > 0
     nonzero_indices = np.where(nonzero_mask)[0].astype(np.int32)
 
-    if len(nonzero_indices) < 3:
+    if len(nonzero_indices) < _MIN_NONZERO_POINTS:
         return None
 
     X_train = _build_features(nonzero_indices)
@@ -109,7 +116,11 @@ def fit_activity_curve(
 
     zero_indices = np.where(~nonzero_mask)[0].astype(np.int32)
     if len(zero_indices) > 0:
-        n_zero_sample = min(len(nonzero_indices), len(zero_indices), 500)
+        n_zero_sample = min(
+            len(nonzero_indices) * _ZERO_SAMPLE_RATIO,
+            len(zero_indices),
+            _MAX_ZERO_SAMPLES,
+        )
         rng = np.random.default_rng(42)
         sampled_zeros = rng.choice(zero_indices, size=n_zero_sample, replace=False)
         X_zeros = _build_features(sampled_zeros)

@@ -159,23 +159,23 @@ class Config(BaseModel):
     )
 
     inertia_observation_days: int = Field(
-        default=45,
+        default=60,
         description="惯性系统观察窗口天数，分析此天数内的用户行为模式",
     )
     inertia_min_active_days: int = Field(
-        default=7,
+        default=2,
         description="峰值时间槽最少活跃天数阈值，低于此值不认为是稳定模式",
     )
     inertia_minute_bucket: int = Field(
-        default=15,
-        description="惯性扫描的分钟聚合粒度，单位分钟（建议 1/5/10/15）",
+        default=30,
+        description="惯性扫描的分钟聚合粒度，单位分钟",
     )
     inertia_quantile_lower: float = Field(
-        default=0.05,
+        default=0.15,
         description="回归曲线下界分位数，越小越保守",
     )
     inertia_quantile_upper: float = Field(
-        default=0.95,
+        default=0.85,
         description="回归曲线上界分位数，越大越保守",
     )
 
