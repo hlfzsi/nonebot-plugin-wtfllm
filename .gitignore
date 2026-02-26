@@ -227,3 +227,4 @@ __marimo__/
 *.7z
 *.bak
 *.tmp
+.markdownlint.json
