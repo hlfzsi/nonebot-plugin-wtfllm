@@ -13,20 +13,23 @@ from ..utils import DATABASE_DATA_DIR, APP_CONFIG
 
 
 class _Lock:
-    __slots__ = ("_enabled", "_lock")
+    __slots__ = ("_enabled", "_async_lock")
 
     def __init__(self, enabled: bool = False):
         self._enabled = enabled
-        self._lock = asyncio.Lock()
+        self._async_lock = asyncio.Lock()
 
     async def __aenter__(self):
         if self._enabled:
-            await self._lock.acquire()
+            await self._async_lock.acquire()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._enabled and self._lock.locked():
-            self._lock.release()
+        if self._enabled:
+            try:
+                self._async_lock.release()
+            except RuntimeError:
+                pass
 
 
 WRITE_LOCK = _Lock()
@@ -35,7 +38,6 @@ _DATABASE_URL = APP_CONFIG.database_url or f"sqlite+aiosqlite:///{_db_path.as_po
 
 ENGINE = create_async_engine(
     _DATABASE_URL,
-    connect_args={"timeout": 30},
     json_serializer=lambda obj: dumps(obj).decode("utf-8"),
     json_deserializer=loads,
 )

@@ -11,7 +11,10 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from nonebot_plugin_wtfllm.llm.tools.tool_group.base import ToolGroupMeta
 from nonebot_plugin_wtfllm.llm.tools.prepare import _prepare, register_tools_to_agent
 from nonebot_plugin_wtfllm.memory.items.storages import MemoryItemStream
-from nonebot_plugin_wtfllm.memory.items.base_items import PrivateMemoryItem, GroupMemoryItem
+from nonebot_plugin_wtfllm.memory.items.base_items import (
+    PrivateMemoryItem,
+    GroupMemoryItem,
+)
 from nonebot_plugin_wtfllm.memory.content.message import Message
 
 # 直接导入子模块避免 llm.__init__ 的循环导入
@@ -458,9 +461,7 @@ class TestFetchOlderMessages:
         mock_repo.get_in_private_by_user_before = AsyncMock(return_value=older)
 
         await _fetch_older_messages(ctx, count=10)
-        ctx.deps.context.copy.assert_called_once_with(
-            share_context=True, empty=True
-        )
+        ctx.deps.context.copy.assert_called_once_with(share_context=True, empty=True)
 
 
 # ===================== reinforce_persona_anchor 测试 =====================
@@ -540,9 +541,7 @@ class TestActivateToolGroup:
         async def deny(ctx):
             return False
 
-        ToolGroupMeta(
-            name="TestActivate_Denied", description="denied", prem=deny
-        )
+        ToolGroupMeta(name="TestActivate_Denied", description="denied", prem=deny)
         ctx = _make_context(active_groups=set())
         result = await _activate_tool_group(ctx, "TestActivate_Denied")
         assert "权限不足" in result
@@ -556,9 +555,7 @@ class TestActivateToolGroup:
         async def deny(ctx):
             return False
 
-        ToolGroupMeta(
-            name="TestActivate_NoPerm", description="no perm", prem=deny
-        )
+        ToolGroupMeta(name="TestActivate_NoPerm", description="no perm", prem=deny)
         ctx = _make_context(active_groups=set())
         result = await _activate_tool_group(
             ctx,
@@ -600,9 +597,7 @@ class TestMarkPointOfInterest:
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
         ctx.deps.context.ctx.alias_provider.resolve_alias.return_value = "real_user_456"
 
-        result = _mark_point_of_interest(
-            ctx, user_id="alias_name", reason="follow-up"
-        )
+        result = _mark_point_of_interest(ctx, user_id="alias_name", reason="follow-up")
         assert "alias_name" in result
         mock_router.mark_poi.assert_called_once()
         poi_arg = mock_router.mark_poi.call_args[0][0]
@@ -772,7 +767,9 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_with_user_id_resolved(self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb):
+    async def test_with_user_id_resolved(
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+    ):
         """user_id 提供且 resolve 成功 -> search_by_entities"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
@@ -819,7 +816,9 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_user_id_cross_session(self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb):
+    async def test_no_user_id_cross_session(
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+    ):
         """user_id=None -> search_cross_session"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
@@ -847,7 +846,9 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_user_id_private_chat_cross_session(self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb):
+    async def test_no_user_id_private_chat_cross_session(
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+    ):
         """私聊且 user_id=None -> exclude_user_id 应传实际值"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
@@ -891,7 +892,9 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_only_knowledge_results(self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb):
+    async def test_only_knowledge_results(
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+    ):
         """仅有知识库结果时也应正确返回"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
@@ -911,7 +914,10 @@ class TestQueryMemory:
 # ===================== _extract_and_track / tool_call_hook 测试 =====================
 
 
-from nonebot_plugin_wtfllm.llm.tools.tool_group.base import _extract_and_track, tool_call_hook
+from nonebot_plugin_wtfllm.llm.tools.tool_group.base import (
+    _extract_and_track,
+    tool_call_hook,
+)
 from nonebot_plugin_wtfllm.llm.deps import ToolCallInfo
 from pydantic_ai import RunContext
 
@@ -1017,6 +1023,7 @@ class TestToolCallHook:
 
     def test_wraps_sync_function(self):
         """包装同步函数并正确追踪"""
+
         def my_sync_tool(ctx):
             """A sync tool."""
             return "sync_result"
@@ -1031,6 +1038,7 @@ class TestToolCallHook:
     @pytest.mark.asyncio
     async def test_wraps_async_function(self):
         """包装异步函数并正确追踪"""
+
         async def my_async_tool(ctx):
             """An async tool."""
             return "async_result"
@@ -1044,6 +1052,7 @@ class TestToolCallHook:
 
     def test_budget_suffix_appended_sync(self):
         """同步函数: cost>0 且 budget 开启时结果包含预算后缀"""
+
         def budgeted_tool(ctx):
             return "base_result"
 
@@ -1057,6 +1066,7 @@ class TestToolCallHook:
     @pytest.mark.asyncio
     async def test_budget_suffix_appended_async(self):
         """异步函数: cost>0 且 budget 开启时结果包含预算后缀"""
+
         async def budgeted_async_tool(ctx):
             return "async_base"
 
@@ -1069,6 +1079,7 @@ class TestToolCallHook:
 
     def test_no_budget_suffix_when_disabled(self):
         """budget 未开启时不追加后缀"""
+
         def plain_tool(ctx):
             return "plain_result"
 
@@ -1079,6 +1090,7 @@ class TestToolCallHook:
 
     def test_preserves_function_name(self):
         """包装后函数名应保留原始函数名"""
+
         def original_name(ctx):
             """Original docstring."""
             pass
@@ -1234,7 +1246,9 @@ class TestGetImageDescription:
 
     def _make_ctx(self, resolve_media=None):
         ctx = _make_context()
-        ctx.deps.context.resolve_media_ref = MagicMock(side_effect=resolve_media or (lambda *a: None))
+        ctx.deps.context.resolve_media_ref = MagicMock(
+            side_effect=resolve_media or (lambda *a: None)
+        )
         return ctx
 
     @pytest.mark.asyncio
@@ -1303,7 +1317,9 @@ class TestGetImageDescription:
         mock_seg.url = None
         mock_seg.message_id = "m1"
         # get_data_uri_async 返回超大 data URI
-        mock_seg.get_data_uri_async = AsyncMock(return_value="data:image/webp;base64," + "x" * 2000001)
+        mock_seg.get_data_uri_async = AsyncMock(
+            return_value="data:image/webp;base64," + "x" * 2000001
+        )
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
         result = await _get_image_description(ctx, ["IMG:1"])
@@ -1341,7 +1357,9 @@ class TestGetImageDescription:
         mock_seg.local_path = "/tmp/img.webp"
         mock_seg.url = None
         mock_seg.message_id = "m1"
-        mock_seg.get_data_uri_async = AsyncMock(return_value="data:image/webp;base64,abc")
+        mock_seg.get_data_uri_async = AsyncMock(
+            return_value="data:image/webp;base64,abc"
+        )
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
         mock_vision.return_value = None
@@ -1360,12 +1378,18 @@ class TestGetImageDescription:
         mock_seg.local_path = "/tmp/img.webp"
         mock_seg.url = None
         mock_seg.message_id = "m1"
-        mock_seg.get_data_uri_async = AsyncMock(return_value="data:image/webp;base64,abc")
+        mock_seg.get_data_uri_async = AsyncMock(
+            return_value="data:image/webp;base64,abc"
+        )
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
 
-        with patch(f"{CORE_MODULE}._get_image_desc", new_callable=AsyncMock) as mock_vision, \
-             patch(f"{CORE_MODULE}.memory_item_repo") as mock_repo:
+        with (
+            patch(
+                f"{CORE_MODULE}._get_image_desc", new_callable=AsyncMock
+            ) as mock_vision,
+            patch(f"{CORE_MODULE}.memory_item_repo") as mock_repo,
+        ):
             mock_desc = MagicMock()
             mock_desc.to_string.return_value = "本地图片描述"
             mock_vision.return_value = [mock_desc]
@@ -1389,7 +1413,9 @@ class TestGetImageContent:
 
     def _make_ctx(self, resolve_media=None):
         ctx = _make_context()
-        ctx.deps.context.resolve_media_ref = MagicMock(side_effect=resolve_media or (lambda *a: None))
+        ctx.deps.context.resolve_media_ref = MagicMock(
+            side_effect=resolve_media or (lambda *a: None)
+        )
         return ctx
 
     @pytest.mark.asyncio

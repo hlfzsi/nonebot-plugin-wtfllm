@@ -7,7 +7,7 @@ __all__ = ["MemoryItemRepository"]
 
 from typing import List, Optional, TYPE_CHECKING
 
-from sqlalchemy import literal_column, select as sa_select, exists as sa_exists
+from sqlalchemy import literal_column, select as sa_select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import delete, select, desc, col, func
 from .base import BaseRepository
