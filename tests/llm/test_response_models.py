@@ -93,21 +93,16 @@ class TestRejectResponseModel:
     """RejectResponse 模型测试"""
 
     def test_create_basic(self):
-        resp = RejectResponse(
-            reason="not relevant", should_show_user=False
-        )
+        resp = RejectResponse(reason="not relevant")
         assert resp.reason == "not relevant"
-        assert resp.should_show_user is False
-        assert resp.message_to_show is None
+        assert resp.message_to_user is None
 
     def test_create_show_user(self):
         resp = RejectResponse(
             reason="off-topic",
-            should_show_user=True,
-            message_to_show="这不是我能回答的",
+            message_to_user="这不是我能回答的",
         )
-        assert resp.should_show_user is True
-        assert resp.message_to_show == "这不是我能回答的"
+        assert resp.message_to_user == "这不是我能回答的"
 
 
 # ===================== Output 类型元组测试 =====================
@@ -177,9 +172,7 @@ class TestRejectResponseSend:
     async def test_send_silent_reject(self):
         """静默拒绝不发送消息"""
         deps = _make_deps()
-        resp = RejectResponse(
-            reason="no", should_show_user=False
-        )
+        resp = RejectResponse(reason="no")
 
         # 不应抛出异常
         with patch(
@@ -212,8 +205,7 @@ class TestRejectResponseSend:
 
             resp = RejectResponse(
                 reason="off topic",
-                should_show_user=True,
-                message_to_show="不好意思",
+                message_to_user="不好意思",
             )
             await resp.send(deps)
 
@@ -504,7 +496,7 @@ class TestRejectResponsePerformSend:
     async def test_no_runtime_raises(self):
         """nb_runtime=None 时抛出 ValueError"""
         deps = _make_deps(with_runtime=False)
-        resp = RejectResponse(reason="no", should_show_user=False)
+        resp = RejectResponse(reason="no")
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp._perform_send(deps)
 
@@ -512,12 +504,9 @@ class TestRejectResponsePerformSend:
     @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
     @patch(f"{MODULE}.msg_tracker")
     async def test_silent_reject(self, mock_tracker, mock_store):
-        """should_show_user=False 时不发送消息、不 store、不 track"""
+        """message_to_user=None 时不发送消息、不 store、不 track"""
         deps = _make_deps()
-        resp = RejectResponse(
-            reason="not relevant",
-            should_show_user=False,
-        )
+        resp = RejectResponse(reason="not relevant")
 
         await resp._perform_send(deps)
 
@@ -531,7 +520,7 @@ class TestRejectResponsePerformSend:
     async def test_show_user_reject(
         self, mock_ensure, mock_tracker, mock_store
     ):
-        """should_show_user=True 且 message_to_show 非空时发送消息"""
+        """message_to_user 非空时发送消息"""
         deps = _make_deps()
 
         mock_receipt = MagicMock()
@@ -543,8 +532,7 @@ class TestRejectResponsePerformSend:
 
             resp = RejectResponse(
                 reason="off topic",
-                should_show_user=True,
-                message_to_show="Sorry, I cannot help with that.",
+                message_to_user="Sorry, I cannot help with that.",
             )
             await resp._perform_send(deps)
 
@@ -892,8 +880,7 @@ class TestRejectResponseWithExtraSegments:
 
             resp = RejectResponse(
                 reason="off topic",
-                should_show_user=True,
-                message_to_show="Sorry",
+                message_to_user="Sorry",
             )
             await resp._perform_send(deps, extra_segments=mock_extra)
 

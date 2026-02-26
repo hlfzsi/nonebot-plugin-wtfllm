@@ -4,6 +4,7 @@ __all__ = [
     "set_alias_to_cache",
     "try_enqueue_message",
     "get_conv_key",
+    "RetrievalChain",
 ]
 
 from nonebot_plugin_alconna import UniMessage
@@ -15,6 +16,7 @@ from .agent_cache import (
     try_enqueue_message,
     get_conv_key,
 )
+from .memory_retrieval import RetrievalChain
 
 _COLLECT = (
     "/ban",

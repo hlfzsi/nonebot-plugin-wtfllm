@@ -221,12 +221,9 @@ class RejectResponse(SendableResponse):
 
     reason: str = Field(..., description="真正拒绝的理由")
 
-    should_show_user: bool = Field(
-        False, description="你希望你拒绝的原因被用户看见吗？"
-    )
-
-    message_to_show: str | None = Field(
-        None, description="如果希望用户看到拒绝原因，可以自定义显示的内容"
+    message_to_user: str | None = Field(
+        default=None,
+        description="向用户显示的拒绝消息。如果为None，则不向用户显示",
     )
 
     async def _perform_send(
@@ -245,9 +242,9 @@ class RejectResponse(SendableResponse):
 
         msg = None
 
-        if self.should_show_user and self.message_to_show:
+        if self.message_to_user:
             msg = UniMessage()
-            msg.text(self.message_to_show)
+            msg.text(self.message_to_user)
             if context.reply_segments:
                 msg += context.reply_segments
 

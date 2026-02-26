@@ -8,7 +8,7 @@ __all__ = [
     "MEDIA_DIR",
     "RESOURCES_DIR",
     "JSON_DIR",
-    "SCHEDULED_MESSAGE_CACHE_DIR",
+    "SCHEDULED_CACHE_DIR",
     "get_agent_id_from_bot",
     "get_bot_by_agent_id",
     "build_min_target",
@@ -17,6 +17,7 @@ __all__ = [
     "init_http_client",
     "shutdown_http_client",
     "count_tokens",
+    "record_log",
 ]
 import uuid
 from pathlib import Path
@@ -44,7 +45,7 @@ VECTOR_DATABASE_DIR: Final[Path] = BASE_DATABASE_DIR / "vector_db"
 JSON_DIR: Final[Path] = get_plugin_data_dir() / "json"
 MEMES_DIR: Final[Path] = get_plugin_data_dir() / "memes"
 MEDIA_DIR: Final[Path] = get_plugin_data_dir() / "media"
-SCHEDULED_MESSAGE_CACHE_DIR: Final[Path] = get_plugin_cache_dir() / "scheduled_messages"
+SCHEDULED_CACHE_DIR: Final[Path] = get_plugin_cache_dir() / "schedule"
 
 
 MODELS_DIR: Final[Path] = get_plugin_data_dir() / "models"  # 无用。Qdrant只能读默认路径
@@ -60,10 +61,18 @@ _paths = [
     VECTOR_DATABASE_DIR,
     JSON_DIR,
     MEMES_DIR,
-    SCHEDULED_MESSAGE_CACHE_DIR,
+    SCHEDULED_CACHE_DIR,
     MEDIA_DIR,
     # MODELS_DIR,
 ]
+
+
+def record_log(message: str) -> None:
+    """记录日志到文件, 仅开发时使用, 发布包中不应包含此函数"""
+    log_file = get_plugin_data_dir() / "activity.log"
+    with log_file.open("a", encoding="utf-8") as f:
+        f.write(message + "\n")
+
 
 for path in _paths:
     path.mkdir(parents=True, exist_ok=True)

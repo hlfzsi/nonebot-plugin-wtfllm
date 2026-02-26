@@ -44,10 +44,10 @@ async def on_startup():
     async with asyncio.TaskGroup() as tg:
         tg.create_task(init_http_client())
         tg.create_task(rdb_init_db())
+        tg.create_task(vdb_on_startup())
 
     async with asyncio.TaskGroup() as tg:
         tg.create_task(init_scheduler())
-        tg.create_task(vdb_on_startup())
 
     setup_lifecycle_tasks()
 
@@ -57,9 +57,9 @@ async def on_shutdown():
     shutdown_lifecycle_tasks()
 
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(vdb_on_shutdown())
         tg.create_task(shutdown_scheduler())
 
     async with asyncio.TaskGroup() as tg:
+        tg.create_task(vdb_on_shutdown())
         tg.create_task(rdb_shutdown_db())
         tg.create_task(shutdown_http_client())

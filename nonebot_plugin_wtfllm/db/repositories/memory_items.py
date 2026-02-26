@@ -7,9 +7,9 @@ __all__ = ["MemoryItemRepository"]
 
 from typing import List, Optional, TYPE_CHECKING
 
-from sqlalchemy import literal_column, select as sa_select
+from sqlalchemy import literal_column, select as sa_select, exists as sa_exists
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlmodel import delete, select, desc, col
+from sqlmodel import delete, select, desc, col, func
 from .base import BaseRepository
 from ..models import MemoryItemTable
 from ..engine import SESSION_MAKER, WRITE_LOCK
@@ -146,7 +146,7 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
         group_id: str,
         agent_id: str,
         timestamp: int,
-        limit: int = 30,
+        limit: int | None = 30,
     ):
         """按 group_id 和时间戳 查询记忆列表
         Args:
@@ -173,7 +173,7 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
         group_id: str,
         agent_id: str,
         timestamp: int,
-        limit: int = 30,
+        limit: int | None = 30,
     ):
         """按 group_id 和时间戳 查询记忆列表
 
@@ -200,7 +200,7 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
         self,
         user_id: str,
         agent_id: str,
-        limit: int = 30,
+        limit: int | None = 30,
     ) -> List["MemoryItemUnion"]:
         """按 user_id 查询记忆列表
 
@@ -226,7 +226,7 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
         self,
         user_id: str,
         agent_id: str,
-        limit: int = 30,
+        limit: int | None = 30,
     ) -> List["MemoryItemUnion"]:
         """按 user_id 查询私聊记忆
 
@@ -254,7 +254,7 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
         user_id: str,
         agent_id: str,
         timestamp: int,
-        limit: int = 30,
+        limit: int | None = 30,
     ) -> List["MemoryItemUnion"]:
         """按 user_id 查询指定时间戳之前的私聊记忆
 
@@ -459,3 +459,228 @@ class MemoryItemRepository(BaseRepository[MemoryItemTable]):
                 items.append(record.to_MemoryItem())
 
             return items
+
+    async def get_active_group_ids(
+        self,
+        agent_id: str,
+        since: int,
+    ) -> list[str]:
+        """
+        获取有活跃记录的去重群组 ID 列表。
+
+        Args:
+            agent_id: 智能体ID
+            since: 起始时间戳（秒）
+        """
+        stmt = (
+            sa_select(col(MemoryItemTable.group_id))
+            .where(col(MemoryItemTable.agent_id) == agent_id)
+            .where(col(MemoryItemTable.created_at) >= since)
+            .where(col(MemoryItemTable.group_id).is_not(None))
+            .group_by(col(MemoryItemTable.group_id))
+        )
+        async with SESSION_MAKER() as session:
+            raw = (await session.exec(stmt)).all()  # type: ignore[arg-type]
+            return [str(row[0]) for row in raw if row[0] is not None]
+
+    async def get_group_activity_bins(
+        self,
+        agent_id: str,
+        group_ids: list[str],
+        since: int,
+        utc_offset: int = 0,
+        min_repeat_days: int = 1,
+    ) -> list[tuple[str | None, str | None, str, int, int]]:
+        """获取指定群聊的活跃分钟分布。
+
+        仅返回「用户级最高活跃天数 ≥ min_repeat_days」的用户全部数据，
+        以在 DB 层过滤不可能通过算法前置检查的低活跃用户。
+
+        Args:
+            agent_id: 智能体 ID
+            group_ids: 要查询的群组 ID 列表
+            since: 起始时间戳（秒）
+            utc_offset: 本地时区偏移（秒）
+            min_repeat_days: 用户最高活跃分钟桶需达到的天数阈值
+
+        Returns:
+            list of (group_id, user_id, sender, minute_of_day, active_days)
+        """
+        offset = int(utc_offset)
+        local_ts = f"(memoryitemtable.created_at + {offset})"
+        minute_sql = f"({local_ts} % 86400) / 60"
+        day_sql = f"({local_ts}) / 86400"
+
+        # 内层：同一天同一分钟去重
+        dedup = (
+            sa_select(
+                col(MemoryItemTable.group_id).label("group_id"),
+                col(MemoryItemTable.sender).label("sender"),
+                literal_column(minute_sql).label("minute_of_day"),
+                literal_column(day_sql).label("day_number"),
+            )
+            .where(col(MemoryItemTable.agent_id) == agent_id)
+            .where(col(MemoryItemTable.created_at) >= since)
+            .where(col(MemoryItemTable.group_id).in_(group_ids))
+            .group_by(
+                col(MemoryItemTable.group_id),
+                col(MemoryItemTable.sender),
+                literal_column("day_number"),
+                literal_column("minute_of_day"),
+            )
+        ).subquery("dedup")
+
+        # 按分钟聚合活跃天数
+        agg = (
+            sa_select(
+                dedup.c.group_id,
+                dedup.c.sender,
+                dedup.c.minute_of_day,
+                func.count().label("active_days"),
+            ).group_by(dedup.c.group_id, dedup.c.sender, dedup.c.minute_of_day)
+        ).subquery("agg")
+
+        if min_repeat_days > 1:
+            # 窗口函数：取每用户最高活跃天数，过滤不达标用户
+            user_max = (
+                func.max(agg.c.active_days)
+                .over(partition_by=[agg.c.group_id, agg.c.sender])
+                .label("user_max_days")
+            )
+
+            windowed = (
+                sa_select(
+                    agg.c.group_id,
+                    agg.c.sender,
+                    agg.c.minute_of_day,
+                    agg.c.active_days,
+                    user_max,
+                )
+            ).subquery("windowed")
+
+            stmt = sa_select(
+                windowed.c.group_id,
+                literal_column("NULL").label("user_id"),
+                windowed.c.sender,
+                windowed.c.minute_of_day,
+                windowed.c.active_days,
+            ).where(windowed.c.user_max_days >= min_repeat_days)
+        else:
+            stmt = sa_select(
+                agg.c.group_id,
+                literal_column("NULL").label("user_id"),
+                agg.c.sender,
+                agg.c.minute_of_day,
+                agg.c.active_days,
+            )
+
+        async with SESSION_MAKER() as session:
+            rows = (await session.exec(stmt)).all()  # type: ignore[arg-type]
+            return [
+                (
+                    row.group_id,
+                    row.user_id,
+                    row.sender,
+                    int(row.minute_of_day),
+                    int(row.active_days),
+                )
+                for row in rows
+            ]
+
+    async def get_private_activity_bins(
+        self,
+        agent_id: str,
+        since: int,
+        utc_offset: int = 0,
+        min_repeat_days: int = 1,
+    ) -> list[tuple[str | None, str | None, str, int, int]]:
+        """获取私聊的活跃分钟分布。
+
+        仅返回「用户级最高活跃天数 ≥ min_repeat_days」的用户全部数据。
+
+        Args:
+            agent_id: 智能体 ID
+            since: 起始时间戳（秒）
+            utc_offset: 本地时区偏移（秒）
+            min_repeat_days: 用户最高活跃分钟桶需达到的天数阈值
+
+        Returns:
+            list of (group_id, user_id, sender, minute_of_day, active_days)
+        """
+        offset = int(utc_offset)
+        local_ts = f"(memoryitemtable.created_at + {offset})"
+        minute_sql = f"({local_ts} % 86400) / 60"
+        day_sql = f"({local_ts}) / 86400"
+
+        dedup = (
+            sa_select(
+                col(MemoryItemTable.user_id).label("user_id"),
+                col(MemoryItemTable.sender).label("sender"),
+                literal_column(minute_sql).label("minute_of_day"),
+                literal_column(day_sql).label("day_number"),
+            )
+            .where(col(MemoryItemTable.agent_id) == agent_id)
+            .where(col(MemoryItemTable.created_at) >= since)
+            .where(col(MemoryItemTable.group_id).is_(None))
+            .group_by(
+                col(MemoryItemTable.user_id),
+                col(MemoryItemTable.sender),
+                literal_column("day_number"),
+                literal_column("minute_of_day"),
+            )
+        ).subquery("dedup")
+
+        agg = (
+            sa_select(
+                dedup.c.user_id,
+                dedup.c.sender,
+                dedup.c.minute_of_day,
+                func.count().label("active_days"),
+            ).group_by(dedup.c.user_id, dedup.c.sender, dedup.c.minute_of_day)
+        ).subquery("agg")
+
+        if min_repeat_days > 1:
+            user_max = (
+                func.max(agg.c.active_days)
+                .over(partition_by=[agg.c.user_id, agg.c.sender])
+                .label("user_max_days")
+            )
+
+            windowed = (
+                sa_select(
+                    agg.c.user_id,
+                    agg.c.sender,
+                    agg.c.minute_of_day,
+                    agg.c.active_days,
+                    user_max,
+                )
+            ).subquery("windowed")
+
+            stmt = sa_select(
+                literal_column("NULL").label("group_id"),
+                windowed.c.user_id,
+                windowed.c.sender,
+                windowed.c.minute_of_day,
+                windowed.c.active_days,
+            ).where(windowed.c.user_max_days >= min_repeat_days)
+        else:
+            stmt = sa_select(
+                literal_column("NULL").label("group_id"),
+                agg.c.user_id,
+                agg.c.sender,
+                agg.c.minute_of_day,
+                agg.c.active_days,
+            )
+
+        async with SESSION_MAKER() as session:
+            rows = (await session.exec(stmt)).all()  # type: ignore[arg-type]
+            return [
+                (
+                    row.group_id,
+                    row.user_id,
+                    row.sender,
+                    int(row.minute_of_day),
+                    int(row.active_days),
+                )
+                for row in rows
+            ]

@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from typing import List, Literal, Union
 
@@ -7,14 +8,15 @@ from nonebot_plugin_alconna import UniMessage
 from .base import ToolGroupMeta
 from .utils import reschedule_deadline
 from ...deps import Context
-from ....scheduler import (
-    schedule_message as _schedule_message,
-    cancel_message as _cancel_message,
-)
-from ....db import scheduled_message_repo
-from ....memory import ImageSegment
+from ....scheduler import schedule_job, cancel_job
+from ....scheduler.triggers import DateTriggerConfig
+from ....scheduler.tasks.invoke_agent import InvokeAgentParams
+from ....scheduler.tasks.send_static_message import SendStaticMessageParams
+from ....db import scheduled_job_repo
+from ....db.models.scheduled_job import ScheduledJobStatus, ScheduledJob
+from ....memory import ImageSegment, MemoryContextBuilder
 from ....v_db import meme_repo
-from ....utils import get_http_client
+from ....utils import get_http_client, SCHEDULED_CACHE_DIR
 
 schedule_message_group = ToolGroupMeta(
     name="ScheduleMessage",
@@ -25,9 +27,9 @@ schedule_message_group = ToolGroupMeta(
 # TODO 允许不预先生成message，而是在触发时动态生成
 class RelativeTime(BaseModel):
     type: Literal["relative"] = "relative"
-    minutes: int | None = Field(None, description="多少分钟后触发")
-    hours: int | None = Field(None, description="多少小时后触发")
-    days: int | None = Field(None, description="多少天后触发")
+    minutes: int | None = Field(default=None, description="多少分钟后触发")
+    hours: int | None = Field(default=None, description="多少小时后触发")
+    days: int | None = Field(default=None, description="多少天后触发")
 
     @property
     def trigger_timestamp(self) -> int:
@@ -56,8 +58,37 @@ class AbsoluteTime(BaseModel):
 TimeConfig = Union[RelativeTime, AbsoluteTime]
 
 
-# @schedule_message_group.tool
-# async def call_later(ctx: Context, schedule_config: TimeConfig) -> str: ...
+def _job_to_text(job: ScheduledJob, ctx: MemoryContextBuilder) -> str:
+    """将 ScheduledJob 格式化为人类可读文本。"""
+    _user = (
+        ctx.ctx.alias_provider.get_alias(job.user_id)
+        if ctx and job.user_id
+        else job.user_id
+    )
+    _group = (
+        ctx.ctx.alias_provider.get_alias(job.group_id)
+        if ctx and job.group_id
+        else job.group_id
+    )
+
+    target_desc = f"用户 {_user}" if _user else ""
+    if _group:
+        target_desc += f" 在群 {_group}"
+
+    trigger_cfg = job.trigger_config
+    trigger_type = trigger_cfg.get("type", "")
+    if trigger_type == "date":
+        run_ts = trigger_cfg.get("run_timestamp", 0)
+        trigger_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(run_ts))
+        trigger_desc = f"触发时间: {trigger_time_str}"
+    else:
+        trigger_desc = f"触发类型: {trigger_type}"
+
+    desc = job.description or job.task_name
+    return (
+        f"定时任务 (job_id={job.job_id}) {trigger_desc} "
+        f"状态: {job.status} {target_desc} 描述: {desc}"
+    )
 
 
 @schedule_message_group.tool(cost=0)
@@ -129,20 +160,79 @@ async def schedule_message(
             except (OSError, ValueError, RuntimeError):
                 unimsg.text("\n哎呀图丢了")
 
-    await _schedule_message(
-        target=ctx.deps.nb_runtime.target,
-        session=ctx.deps.nb_runtime.session,
-        unimsg=unimsg,
-        trigger_time=schedule_config.trigger_timestamp,
+    trigger_ts = schedule_config.trigger_timestamp
+    params = SendStaticMessageParams(
+        target_data=ctx.deps.nb_runtime.target.dump(),
+        messages=unimsg.dump(media_save_dir=SCHEDULED_CACHE_DIR),
+        user_id=ctx.deps.ids.user_id,
+        group_id=ctx.deps.ids.group_id,
+        agent_id=ctx.deps.ids.agent_id,
+    )
+    trigger = DateTriggerConfig(run_timestamp=trigger_ts)
+
+    trigger_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(trigger_ts))
+    await schedule_job(
+        task_name="send_static_message",
+        task_params=params,
+        trigger=trigger,
+        user_id=ctx.deps.ids.user_id,
+        group_id=ctx.deps.ids.group_id,
+        agent_id=ctx.deps.ids.agent_id,
+        description=f"定时消息 [{trigger_time_str}]: {message[:50]}",
     )
     return "定时消息已设置！"
 
 
-@schedule_message_group.tool(cost=0)
-async def cancel_scheduled_message(ctx: Context, job_id: str) -> str:
-    """取消已设置的定时消息。
+@schedule_message_group.tool(cost=3)
+async def schedule_agent_task(
+    ctx: Context, schedule_config: TimeConfig, instruction: str
+) -> str:
+    """在指定时间触发执行由你介入的特定任务。仅必要时使用。
 
-    只能取消属于当前用户且状态为pending的定时消息。
+    设置一个延时任务，在到达指定时间后，系统会以 `instruction` 作为输入
+    再次唤起你。这适用于提醒、定时检查或需要在未来某个时间点执行的复杂操作。
+
+    Args:
+        schedule_config (TimeConfig): 时间配置，支持相对时间（如“5分钟后”）或绝对时间（如“2023-10-01 10:00”）。
+        instruction (str): 到达触发时间时发送给智能体的指令或提醒内容。
+    """
+    if ctx.deps.nb_runtime is None:
+        raise ValueError(
+            "nb_runtime is required in Context.deps for scheduling messages."
+        )
+    if not ctx.deps.ids.user_id:
+        raise ValueError(
+            "User ID is required in Context.deps.ids for scheduling messages."
+        )
+
+    reschedule_deadline(ctx, 15)
+    trigger_ts = schedule_config.trigger_timestamp
+    trigger = DateTriggerConfig(run_timestamp=trigger_ts)
+    params = InvokeAgentParams(
+        user_id=ctx.deps.ids.user_id,
+        group_id=ctx.deps.ids.group_id,
+        agent_id=ctx.deps.ids.agent_id,
+        prompt=instruction,
+        target_data=ctx.deps.nb_runtime.target.dump(),
+        session_data=ctx.deps.nb_runtime.session.dump(),
+    )
+    await schedule_job(
+        task_name="invoke_agent",
+        task_params=params,
+        trigger=trigger,
+        user_id=ctx.deps.ids.user_id,
+        group_id=ctx.deps.ids.group_id,
+        agent_id=ctx.deps.ids.agent_id,
+        description=f"定时任务: {instruction[:50]}",
+    )
+    return "定时任务已设置！"
+
+
+@schedule_message_group.tool(cost=0)
+async def cancel_scheduled_task(ctx: Context, job_id: str) -> str:
+    """取消已设置的定时任务。
+
+    只能取消属于当前用户且状态为pending的定时任务。
 
     Args:
         job_id: 要取消的定时消息的job ID
@@ -151,56 +241,56 @@ async def cancel_scheduled_message(ctx: Context, job_id: str) -> str:
         str: 操作结果描述，包含成功或失败的原因
     """
     reschedule_deadline(ctx, 15)
-    job = await scheduled_message_repo.get_by_job_id(job_id)
+    job = await scheduled_job_repo.get_by_job_id(job_id)
     if not job:
         return f"未找到 job_id={job_id} 的定时消息记录。"
 
     if job.user_id != ctx.deps.ids.user_id:
         return f"你没有权限取消 job_id={job_id} 的定时消息, 因为该job不属于当前用户。"
 
-    if job.status != "pending":
+    if job.status != ScheduledJobStatus.PENDING:
         return f"job_id={job_id} 的定时消息当前状态为 {job.status}，无法取消。"
 
-    await _cancel_message(job_id)
+    await cancel_job(job_id)
     return f"定时消息 job_id={job_id} 已取消。"
 
 
 @schedule_message_group.tool(cost=0)
-async def list_scheduled_messages(
-    ctx: Context, type: Literal["user", "group"], limit: int = 10
+async def list_scheduled_tasks(
+    ctx: Context, type: Literal["user", "group"], limit: int = 5
 ) -> str:
     """列出定时消息。
 
-    查询当前用户或当前群组的定时消息列表。
+    查询当前用户或当前群组的定时任务列表。
 
     Args:
         type: 查询类型，"user"表示当前用户，"group"表示当前群组
-        limit: 返回结果的最大数量，默认为10
+        limit: 返回结果的最大数量，默认为5
 
     Returns:
-        str: 定时消息列表文本
+        str: 定时任务列表文本
     """
     reschedule_deadline(ctx, 15)
     if type == "user":
         if not ctx.deps.ids.user_id:
             raise ValueError(
-                "User ID is required in Context.deps.ids for listing user scheduled messages."
+                "User ID is required in Context.deps.ids for listing user scheduled tasks."
             )
-        schedule_messages = await scheduled_message_repo.list_by_user(
+        jobs = await scheduled_job_repo.list_by_user(
             user_id=ctx.deps.ids.user_id, agent_id=ctx.deps.ids.agent_id, limit=limit
         )
     elif type == "group":
         if not ctx.deps.ids.group_id:
             raise ValueError(
-                "Group ID is required in Context.deps.ids for listing group scheduled messages."
+                "Group ID is required in Context.deps.ids for listing group scheduled tasks."
             )
-        schedule_messages = await scheduled_message_repo.list_by_group(
+        jobs = await scheduled_job_repo.list_by_group(
             group_id=ctx.deps.ids.group_id, agent_id=ctx.deps.ids.agent_id, limit=limit
         )
     else:
         raise ValueError("Invalid type. Must be 'user' or 'group'.")
 
-    if not schedule_messages:
-        return "当前用户没有任何定时消息。"
+    if not jobs:
+        return "当前用户没有任何定时任务。"
 
-    return "\n\n".join([(msg.to_text(ctx.deps.context)) for msg in schedule_messages])
+    return "\n\n".join([_job_to_text(job, ctx.deps.context) for job in jobs])

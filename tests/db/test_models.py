@@ -326,144 +326,83 @@ class TestUserPersonaModel:
         assert before <= persona.updated_at <= after
 
 
-# ===================== ScheduledMessage 模型字段测试 =====================
+# ===================== ScheduledJob 模型字段测试 =====================
 
 
-class TestScheduledMessageModel:
-    """ScheduledMessage 模型字段测试"""
+class TestScheduledJobModel:
+    """ScheduledJob 模型字段测试"""
 
     def test_status_enum_values(self):
         """测试状态枚举定义"""
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledMessageStatus,
+        from nonebot_plugin_wtfllm.db.models.scheduled_job import (
+            ScheduledJobStatus,
         )
 
-        assert ScheduledMessageStatus.PENDING == "pending"
-        assert ScheduledMessageStatus.COMPLETED == "completed"
-        assert ScheduledMessageStatus.FAILED == "failed"
-        assert ScheduledMessageStatus.MISSED == "missed"
-        assert ScheduledMessageStatus.CANCELED == "canceled"
+        assert ScheduledJobStatus.PENDING == "pending"
+        assert ScheduledJobStatus.COMPLETED == "completed"
+        assert ScheduledJobStatus.FAILED == "failed"
+        assert ScheduledJobStatus.MISSED == "missed"
+        assert ScheduledJobStatus.CANCELED == "canceled"
 
-    def test_func_type_enum_values(self):
-        """测试函数类型枚举定义"""
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledFunctionType,
+    def test_create_basic_scheduled_job(self):
+        """测试直接构建 ScheduledJob"""
+        from nonebot_plugin_wtfllm.db.models.scheduled_job import (
+            ScheduledJob,
+            ScheduledJobStatus,
         )
 
-        assert ScheduledFunctionType.STATIC_MESSAGE == "static_message"
-        assert ScheduledFunctionType.DYNAMIC_MESSAGE == "dynamic_message"
-
-    def test_create_basic_scheduled_message(self):
-        """测试直接构建 ScheduledMessage"""
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledMessage,
-            ScheduledMessageStatus,
-            ScheduledFunctionType,
-        )
-
-        msg = ScheduledMessage(
+        job = ScheduledJob(
             job_id="job_test",
-            target_data={"platform": "qq", "id": "123"},
+            task_name="send_static_message",
+            task_params={"user_id": "user_1", "messages": [{"type": "text", "content": "hello"}]},
+            trigger_config={"type": "date", "run_timestamp": 999999},
             user_id="user_1",
             group_id="group_1",
             agent_id="agent_1",
-            messages=[{"type": "text", "content": "hello"}],
-            trigger_time=999999,
-            status=ScheduledMessageStatus.PENDING,
+            status=ScheduledJobStatus.PENDING,
             created_at=100000,
-            func_type=ScheduledFunctionType.STATIC_MESSAGE,
+            description="Test job",
         )
 
-        assert msg.job_id == "job_test"
-        assert msg.status == "pending"
-        assert msg.func_type == "static_message"
-        assert msg.executed_at is None
-        assert msg.error_message is None
-        assert msg.id is None  # auto-increment
+        assert job.job_id == "job_test"
+        assert job.task_name == "send_static_message"
+        assert job.status == "pending"
+        assert job.executed_at is None
+        assert job.error_message is None
+        assert job.id is None  # auto-increment
+        assert job.description == "Test job"
+        assert job.trigger_config["type"] == "date"
+        assert job.task_params["user_id"] == "user_1"
 
-    def test_private_scheduled_message(self):
-        """测试私聊定时消息（group_id 为 None）"""
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledMessage,
-            ScheduledFunctionType,
+    def test_private_scheduled_job(self):
+        """测试私聊定时任务（group_id 为 None）"""
+        from nonebot_plugin_wtfllm.db.models.scheduled_job import (
+            ScheduledJob,
         )
 
-        msg = ScheduledMessage(
+        job = ScheduledJob(
             job_id="job_private",
-            target_data={},
+            task_name="send_static_message",
+            task_params={},
+            trigger_config={"type": "date", "run_timestamp": 100},
             user_id="user_1",
             group_id=None,
             agent_id="agent_1",
-            messages=[],
-            trigger_time=100,
             created_at=50,
-            func_type=ScheduledFunctionType.DYNAMIC_MESSAGE,
         )
-        assert msg.group_id is None
-        assert msg.func_type == "dynamic_message"
+        assert job.group_id is None
 
+    def test_created_at_default(self):
+        """测试 created_at 默认值"""
+        import time
+        from nonebot_plugin_wtfllm.db.models.scheduled_job import ScheduledJob
 
-class TestScheduledMessageToText:
-    """ScheduledMessage.to_text 测试"""
-
-    def _make_msg(self, **overrides):
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledMessage,
-            ScheduledMessageStatus,
-            ScheduledFunctionType,
+        before = int(time.time())
+        job = ScheduledJob(
+            job_id="job_default",
+            task_name="test",
+            task_params={},
+            trigger_config={"type": "date", "run_timestamp": 100},
         )
-
-        defaults = dict(
-            job_id="job_tt",
-            target_data={},
-            user_id="user_1",
-            group_id="group_1",
-            agent_id="agent_1",
-            messages=[{"type": "text", "content": "hi"}],
-            trigger_time=1700000000,
-            status=ScheduledMessageStatus.PENDING,
-            created_at=1699999900,
-            func_type=ScheduledFunctionType.STATIC_MESSAGE,
-        )
-        defaults.update(overrides)
-        return ScheduledMessage(**defaults)
-
-    def test_basic_to_text(self):
-        msg = self._make_msg()
-        text = msg.to_text(ctx=None)
-        assert "job_tt" in text
-        assert "pending" in text
-        assert "user_1" in text
-        assert "group_1" in text
-
-    def test_to_text_no_group(self):
-        msg = self._make_msg(group_id=None)
-        text = msg.to_text(ctx=None)
-        assert "job_tt" in text
-        assert "user_1" in text
-        assert "在群" not in text
-
-    def test_to_text_dynamic_message(self):
-        from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-            ScheduledFunctionType,
-        )
-
-        msg = self._make_msg(func_type=ScheduledFunctionType.DYNAMIC_MESSAGE)
-        text = msg.to_text(ctx=None)
-        assert "<动态消息>" in text
-
-    def test_to_text_static_message_shows_content(self):
-        msg = self._make_msg()
-        text = msg.to_text(ctx=None)
-        assert "hi" in text
-
-    def test_to_text_with_context(self):
-        from unittest.mock import MagicMock
-
-        mock_ctx = MagicMock()
-        mock_ctx.ctx.alias_provider.get_alias = lambda x: f"Alias({x})"
-
-        msg = self._make_msg()
-        text = msg.to_text(ctx=mock_ctx)
-        assert "Alias(user_1)" in text
-        assert "Alias(group_1)" in text
+        after = int(time.time())
+        assert before <= job.created_at <= after

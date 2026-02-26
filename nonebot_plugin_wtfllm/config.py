@@ -22,6 +22,11 @@ class Config(BaseModel):
         description="是否忽略合并引用消息",
     )
 
+    database_url: str | None = Field(
+        default=None,
+        description="数据库连接URL，设置后使用指定数据库, 否则使用默认的SQLite数据库",
+    )
+
     media_lifecycle_days: int = Field(
         default=30,
         description="媒体文件生命周期，单位天，超过该时间的媒体文件将被删除",
@@ -38,13 +43,8 @@ class Config(BaseModel):
     )
 
     tool_point_budget: int = Field(
-        default=6,
+        default=5,
         description="工具点数预算总量，0 表示不启用预算限制",
-    )
-
-    tool_point_default_cost: int = Field(
-        default=1,
-        description="未显式指定 cost 的工具的默认点数消耗",
     )
 
     web_search_proxy: str | None = Field(
@@ -57,13 +57,8 @@ class Config(BaseModel):
         description="消息追踪时间窗口，单位分钟",
     )
 
-    short_memory_time_minutes: int = Field(
-        default=15,
-        description="默认注入的短期记忆时间窗口，单位分钟。仅加载此时间窗口内的最近消息",
-    )
-
     short_memory_max_count: int = Field(
-        default=10,
+        default=15,
         description="默认注入的短期记忆最大条数。与时间窗口取交集（同时满足）",
     )
 
@@ -112,7 +107,7 @@ class Config(BaseModel):
     llm_role_setting: str = Field(default="", description="LLM 角色设定")
     llm_extra_body: dict = Field(default_factory=dict, description="LLM 额外请求参数")
     llm_support_vision: bool = Field(
-        default=True, description="主agent是否具备视觉理解能力"
+        default=False, description="主agent是否具备视觉理解能力"
     )
     llm_use_responses_api: bool = Field(
         default=False, description="是否使用Response API, 暂无证据显示更节约token"
@@ -161,6 +156,27 @@ class Config(BaseModel):
 
     sparse_model_name: str = Field(
         default="Qdrant/bm25", description="稀疏向量模型名称及前缀"
+    )
+
+    inertia_observation_days: int = Field(
+        default=45,
+        description="惯性系统观察窗口天数，分析此天数内的用户行为模式",
+    )
+    inertia_min_active_days: int = Field(
+        default=7,
+        description="峰值时间槽最少活跃天数阈值，低于此值不认为是稳定模式",
+    )
+    inertia_minute_bucket: int = Field(
+        default=15,
+        description="惯性扫描的分钟聚合粒度，单位分钟（建议 1/5/10/15）",
+    )
+    inertia_quantile_lower: float = Field(
+        default=0.05,
+        description="回归曲线下界分位数，越小越保守",
+    )
+    inertia_quantile_upper: float = Field(
+        default=0.95,
+        description="回归曲线上界分位数，越大越保守",
     )
 
     def model_post_init(self, __context):

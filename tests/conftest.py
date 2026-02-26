@@ -48,6 +48,7 @@ _mock_config.knowledge_base_max_tokens = 1024
 _mock_config.memory_item_max_chars = 60
 _mock_config.short_memory_time_minutes = 15
 _mock_config.short_memory_max_count = 10
+_mock_config.database_url = None
 
 # Mock compress_agent_model_config
 _mock_compress_config = MagicMock()

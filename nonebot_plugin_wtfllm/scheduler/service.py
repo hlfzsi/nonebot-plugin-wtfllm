@@ -1,87 +1,125 @@
-"""定时消息调度服务
+__all__ = ["schedule_job", "cancel_job"]
 
-提供创建和取消定时消息的高层接口，同时操作 APScheduler 与数据库。
-"""
-
-__all__ = ["schedule_message", "cancel_message"]
-
-import time
 import uuid
-from datetime import datetime, timezone
 
 import pybase64
-from nonebot_plugin_uninfo import Uninfo
-from nonebot_plugin_alconna import UniMessage, Target
+from pydantic import BaseModel
 
 from .engine import scheduler
-from .executor import get_handle_func_by_type
-from ..db import scheduled_message_repo
-from ..db.models import ScheduledMessage
-from ..db.models.scheduled_message import ScheduledFunctionType
+from .executor import execute_scheduled_job
+from .registry import get_task_handler
+from .triggers import TriggerConfig, DateTriggerConfig, IntervalTriggerConfig, CronTriggerConfig
+from ..db import scheduled_job_repo
+from ..db.models.scheduled_job import ScheduledJob
 from ..utils import logger
 
 
-def short_uuid():
+def _generate_job_id() -> str:
     uuid_bytes = uuid.uuid4().bytes
     encoded = pybase64.urlsafe_b64encode(uuid_bytes).decode().rstrip("=")
     return f"sched_{encoded[:11]}"
 
 
-async def schedule_message(
-    target: Target,
-    session: Uninfo,
-    unimsg: UniMessage,
-    trigger_time: int,
-    func_type: ScheduledFunctionType = ScheduledFunctionType.STATIC_MESSAGE,
-) -> ScheduledMessage:
-    """创建定时消息：同时写入数据库并注册 APScheduler 作业
+def _register_apscheduler_job(job_id: str, trigger: TriggerConfig) -> None:
+    """根据 trigger 类型向 APScheduler 注册作业。"""
+    if isinstance(trigger, DateTriggerConfig):
+        scheduler.add_job(
+            execute_scheduled_job,
+            trigger="date",
+            run_date=trigger.run_date,
+            id=job_id,
+            args=[job_id],
+            replace_existing=True,
+            misfire_grace_time=60 * 5,
+        )
+    elif isinstance(trigger, IntervalTriggerConfig):
+        kwargs = {}
+        if trigger.seconds:
+            kwargs["seconds"] = trigger.seconds
+        if trigger.minutes:
+            kwargs["minutes"] = trigger.minutes
+        if trigger.hours:
+            kwargs["hours"] = trigger.hours
+        if trigger.days:
+            kwargs["days"] = trigger.days
+        scheduler.add_job(
+            execute_scheduled_job,
+            trigger="interval",
+            id=job_id,
+            args=[job_id],
+            replace_existing=True,
+            misfire_grace_time=60 * 5,
+            **kwargs,
+        )
+    elif isinstance(trigger, CronTriggerConfig):
+        scheduler.add_job(
+            execute_scheduled_job,
+            trigger="cron",
+            minute=trigger.minute,
+            hour=trigger.hour,
+            day=trigger.day,
+            month=trigger.month,
+            day_of_week=trigger.day_of_week,
+            id=job_id,
+            args=[job_id],
+            replace_existing=True,
+            misfire_grace_time=60 * 5,
+        )
+    else:
+        raise ValueError(f"Unsupported trigger type: {type(trigger)}")
+
+
+async def schedule_job(
+    task_name: str,
+    task_params: BaseModel,
+    trigger: TriggerConfig,
+    *,
+    user_id: str | None = None,
+    group_id: str | None = None,
+    agent_id: str | None = None,
+    description: str | None = None,
+) -> ScheduledJob:
+    """创建调度任务：写入数据库并注册 APScheduler 作业。
 
     Args:
-        target: 消息发送目标
-        session: 当前会话信息
-        unimsg: 待发送的消息内容
-        trigger_time: 触发时间（Unix 时间戳）
+        task_name: 注册表中的任务类型名称（必须已通过 @scheduled_task 注册）
+        task_params: 任务参数 (Pydantic BaseModel)
+        trigger: 触发器配置
+        user_id: 可选，所属用户
+        group_id: 可选，关联群组
+        agent_id: 可选，Bot/Agent
+        description: 可选，人类可读描述
 
     Returns:
-        持久化后的 ScheduledMessage 记录
+        持久化后的 ScheduledJob 记录
     """
-    job_id = short_uuid()
+    get_task_handler(task_name)
 
-    record = ScheduledMessage.create(
+    job_id = _generate_job_id()
+
+    record = ScheduledJob(
         job_id=job_id,
-        target=target,
-        session=session,
-        unimsg=unimsg,
-        trigger_time=trigger_time,
-        func_type=func_type,
-        created_at=int(time.time()),
+        task_name=task_name,
+        task_params=task_params.model_dump(),
+        trigger_config=trigger.model_dump(),
+        user_id=user_id,
+        group_id=group_id,
+        agent_id=agent_id,
+        description=description,
     )
-    record = await scheduled_message_repo.save(record)
+    record = await scheduled_job_repo.save(record)
 
-    handle_func = get_handle_func_by_type(func_type)
+    _register_apscheduler_job(job_id, trigger)
 
-    run_date = datetime.fromtimestamp(trigger_time, tz=timezone.utc)
-    scheduler.add_job(
-        handle_func,
-        trigger="date",
-        run_date=run_date,
-        id=job_id,
-        args=[job_id],
-        replace_existing=True,
-        misfire_grace_time=60 * 5,
-    )
-
-    logger.info(
-        f"Scheduled message created: job_id={job_id}, trigger_time={trigger_time}"
-    )
+    logger.info(f"Scheduled job created: job_id={job_id}, task={task_name}")
     return record
 
 
-async def cancel_message(job_id: str) -> bool:
-    """取消定时消息：同时从 APScheduler 移除并更新数据库状态
+async def cancel_job(job_id: str) -> bool:
+    """取消调度任务：从 APScheduler 移除并更新数据库状态。
 
     Args:
-        job_id: APScheduler 作业 ID
+        job_id: 作业 ID
 
     Returns:
         是否成功取消
@@ -90,9 +128,9 @@ async def cancel_message(job_id: str) -> bool:
     if existing_job:
         scheduler.remove_job(job_id)
 
-    record = await scheduled_message_repo.mark_canceled(job_id)
+    record = await scheduled_job_repo.mark_canceled(job_id)
     if record:
-        logger.info(f"Scheduled message canceled: job_id={job_id}")
+        logger.info(f"Scheduled job canceled: job_id={job_id}")
         return True
 
     logger.warning(f"Cancel failed, record not found: job_id={job_id}")

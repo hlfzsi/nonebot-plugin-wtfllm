@@ -219,5 +219,11 @@ __marimo__/
 # uv lock (uncomment if needed)
 # uv.lock
 
-# Clean scripts
-clean_pyc.bat
+# Other files
+*.bat
+*.log
+*.zip
+*.rar
+*.7z
+*.bak
+*.tmp

@@ -2,7 +2,7 @@
 tests/scheduler 的 conftest
 
 将 nonebot_plugin_wtfllm.scheduler 注册为裸包（不执行 __init__.py），
-以便可以单独导入 service.py / executor.py / recovery.py 进行测试。
+以便可以单独导入子模块进行测试。
 """
 import sys
 import types
@@ -27,15 +27,22 @@ def _register_bare_package(dotted_name: str, directory: Path):
 for _mod in [
     "nonebot_plugin_wtfllm.scheduler",
     "nonebot_plugin_wtfllm.scheduler.engine",
+    "nonebot_plugin_wtfllm.scheduler.registry",
+    "nonebot_plugin_wtfllm.scheduler.triggers",
     "nonebot_plugin_wtfllm.scheduler.executor",
     "nonebot_plugin_wtfllm.scheduler.recovery",
     "nonebot_plugin_wtfllm.scheduler.service",
+    "nonebot_plugin_wtfllm.scheduler.tasks",
+    "nonebot_plugin_wtfllm.scheduler.tasks.send_message",
 ]:
     sys.modules.pop(_mod, None)
 
 # --- 将 scheduler 注册为裸包 ---
 _register_bare_package(
     "nonebot_plugin_wtfllm.scheduler", _SRC_DIR / "scheduler"
+)
+_register_bare_package(
+    "nonebot_plugin_wtfllm.scheduler.tasks", _SRC_DIR / "scheduler" / "tasks"
 )
 
 # --- 预注入 services mock（打断循环依赖）---
@@ -62,13 +69,12 @@ for mod_name in [
     if mod_name not in sys.modules:
         sys.modules[mod_name] = MagicMock()
 
-# --- 预注入 stream_processing mock ---
-for mod_name in [
-    "nonebot_plugin_wtfllm.stream_processing",
-    "nonebot_plugin_wtfllm.stream_processing.extract",
-]:
-    if mod_name not in sys.modules:
-        sys.modules[mod_name] = MagicMock()
+# --- 预注入 stream_processing ---
+_register_bare_package(
+    "nonebot_plugin_wtfllm.stream_processing", _SRC_DIR / "stream_processing"
+)
+if "nonebot_plugin_wtfllm.stream_processing.extract" not in sys.modules:
+    sys.modules["nonebot_plugin_wtfllm.stream_processing.extract"] = MagicMock()
 
 # --- mock apscheduler ---
 if "apscheduler" not in sys.modules:
@@ -81,6 +87,9 @@ if "apscheduler.schedulers.asyncio" not in sys.modules:
 
 # Now import the actual scheduler submodules
 _il.import_module("nonebot_plugin_wtfllm.scheduler.engine")
+_il.import_module("nonebot_plugin_wtfllm.scheduler.registry")
+_il.import_module("nonebot_plugin_wtfllm.scheduler.triggers")
 _il.import_module("nonebot_plugin_wtfllm.scheduler.executor")
 _il.import_module("nonebot_plugin_wtfllm.scheduler.recovery")
 _il.import_module("nonebot_plugin_wtfllm.scheduler.service")
+_il.import_module("nonebot_plugin_wtfllm.scheduler.tasks.send_static_message")

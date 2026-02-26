@@ -12,17 +12,16 @@ from nonebot_plugin_wtfllm.db import engine as db_engine
 from nonebot_plugin_wtfllm.db import lifecycle as db_lifecycle
 from nonebot_plugin_wtfllm.db.repositories import base as repo_base
 from nonebot_plugin_wtfllm.db.repositories import memory_items as repo_memory
-from nonebot_plugin_wtfllm.db.repositories import scheduled_message as repo_scheduled
+from nonebot_plugin_wtfllm.db.repositories import scheduled_job as repo_scheduled
 from nonebot_plugin_wtfllm.db.repositories import user_persona as repo_user_persona
 from nonebot_plugin_wtfllm.db.repositories.memory_items import MemoryItemRepository
-from nonebot_plugin_wtfllm.db.repositories.scheduled_message import (
-    ScheduledMessageRepository,
+from nonebot_plugin_wtfllm.db.repositories.scheduled_job import (
+    ScheduledJobRepository,
 )
 from nonebot_plugin_wtfllm.db.repositories.user_persona import UserPersonaRepository
-from nonebot_plugin_wtfllm.db.models.scheduled_message import (
-    ScheduledMessage,
-    ScheduledMessageStatus,
-    ScheduledFunctionType,
+from nonebot_plugin_wtfllm.db.models.scheduled_job import (
+    ScheduledJob,
+    ScheduledJobStatus,
 )
 from nonebot_plugin_wtfllm.memory.content.message import Message
 from nonebot_plugin_wtfllm.memory.items.base_items import (
@@ -175,43 +174,38 @@ async def test_user_persona_repository_updates(in_memory_db):
 
 
 @pytest.mark.asyncio
-async def test_scheduled_message_repository_flow(in_memory_db):
-    repo = ScheduledMessageRepository()
+async def test_scheduled_job_repository_flow(in_memory_db):
+    repo = ScheduledJobRepository()
 
-    msg_pending = ScheduledMessage(
+    job_pending = ScheduledJob(
         job_id="job_1",
-        target_data={},
+        task_name="send_static_message",
+        task_params={"user_id": "user_1", "messages": []},
+        trigger_config={"type": "date", "run_timestamp": 100},
         user_id="user_1",
         group_id=None,
         agent_id="agent_1",
-        messages=[{"type": "text", "content": "hello"}],
-        trigger_time=100,
-        status=ScheduledMessageStatus.PENDING,
+        status=ScheduledJobStatus.PENDING,
         created_at=10,
-        func_type=ScheduledFunctionType.STATIC_MESSAGE,
     )
-    msg_completed = ScheduledMessage(
+    job_completed = ScheduledJob(
         job_id="job_2",
-        target_data={},
+        task_name="send_static_message",
+        task_params={"user_id": "user_2", "messages": []},
+        trigger_config={"type": "date", "run_timestamp": 50},
         user_id="user_2",
         group_id="group_1",
         agent_id="agent_1",
-        messages=[{"type": "text", "content": "done"}],
-        trigger_time=50,
-        status=ScheduledMessageStatus.COMPLETED,
+        status=ScheduledJobStatus.COMPLETED,
         created_at=5,
         executed_at=60,
-        func_type=ScheduledFunctionType.STATIC_MESSAGE,
     )
 
-    await repo.save(msg_pending)
-    await repo.save(msg_completed)
+    await repo.save(job_pending)
+    await repo.save(job_completed)
 
     pending = await repo.list_pending(agent_id="agent_1")
-    assert [msg.job_id for msg in pending] == ["job_1"]
-
-    missed = await repo.list_missed(cutoff=120)
-    assert [msg.job_id for msg in missed] == ["job_1"]
+    assert [j.job_id for j in pending] == ["job_1"]
 
     updated = await repo.mark_failed("job_1", error_message="boom")
     assert updated is not None
@@ -529,41 +523,42 @@ class TestUserPersonaText:
             await repo.get_persona_text(user_id=None, real_user_id=None)
 
 
-# ===================== ScheduledMessageRepository 扩展测试 =====================
+# ===================== ScheduledJobRepository 扩展测试 =====================
 
 
-def _make_scheduled_msg(
+def _make_scheduled_job(
     job_id: str,
-    status: ScheduledMessageStatus = ScheduledMessageStatus.PENDING,
-    trigger_time: int = 1000,
+    status: ScheduledJobStatus = ScheduledJobStatus.PENDING,
+    run_timestamp: int = 1000,
     agent_id: str = "agent_1",
     user_id: str = "user_1",
     group_id: str | None = None,
     executed_at: int | None = None,
-) -> ScheduledMessage:
-    return ScheduledMessage(
+    task_name: str = "send_static_message",
+) -> ScheduledJob:
+    return ScheduledJob(
         job_id=job_id,
-        target_data={"platform": "test"},
+        task_name=task_name,
+        task_params={"user_id": user_id, "messages": [{"type": "text", "content": f"msg_{job_id}"}]},
+        trigger_config={"type": "date", "run_timestamp": run_timestamp},
         user_id=user_id,
         group_id=group_id,
         agent_id=agent_id,
-        messages=[{"type": "text", "content": f"msg_{job_id}"}],
-        trigger_time=trigger_time,
         status=status,
-        created_at=trigger_time - 100,
+        created_at=run_timestamp - 100,
         executed_at=executed_at,
-        func_type=ScheduledFunctionType.STATIC_MESSAGE,
+        description=f"Test job {job_id}",
     )
 
 
-class TestScheduledMessageMarkOperations:
-    """ScheduledMessageRepository mark 操作测试"""
+class TestScheduledJobMarkOperations:
+    """ScheduledJobRepository mark 操作测试"""
 
     @pytest.mark.asyncio
     async def test_mark_completed(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        msg = _make_scheduled_msg("j_complete")
-        await repo.save(msg)
+        repo = ScheduledJobRepository()
+        job = _make_scheduled_job("j_complete")
+        await repo.save(job)
 
         result = await repo.mark_completed("j_complete")
         assert result is not None
@@ -572,9 +567,9 @@ class TestScheduledMessageMarkOperations:
 
     @pytest.mark.asyncio
     async def test_mark_missed(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        msg = _make_scheduled_msg("j_missed")
-        await repo.save(msg)
+        repo = ScheduledJobRepository()
+        job = _make_scheduled_job("j_missed")
+        await repo.save(job)
 
         result = await repo.mark_missed("j_missed")
         assert result is not None
@@ -582,9 +577,9 @@ class TestScheduledMessageMarkOperations:
 
     @pytest.mark.asyncio
     async def test_mark_canceled(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        msg = _make_scheduled_msg("j_cancel")
-        await repo.save(msg)
+        repo = ScheduledJobRepository()
+        job = _make_scheduled_job("j_cancel")
+        await repo.save(job)
 
         result = await repo.mark_canceled("j_cancel")
         assert result is not None
@@ -592,21 +587,21 @@ class TestScheduledMessageMarkOperations:
 
     @pytest.mark.asyncio
     async def test_mark_nonexistent_returns_none(self, in_memory_db):
-        repo = ScheduledMessageRepository()
+        repo = ScheduledJobRepository()
         result = await repo.mark_completed("nonexistent_job")
         assert result is None
 
 
-class TestScheduledMessageBatchMiss:
-    """ScheduledMessageRepository batch_mark_missed 测试"""
+class TestScheduledJobBatchMiss:
+    """ScheduledJobRepository batch_mark_missed_date_jobs 测试"""
 
     @pytest.mark.asyncio
     async def test_batch_mark_missed(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        for jid, tt in [("bm_1", 100), ("bm_2", 200), ("bm_3", 500)]:
-            await repo.save(_make_scheduled_msg(jid, trigger_time=tt))
+        repo = ScheduledJobRepository()
+        for jid, ts in [("bm_1", 100), ("bm_2", 200), ("bm_3", 500)]:
+            await repo.save(_make_scheduled_job(jid, run_timestamp=ts))
 
-        count = await repo.batch_mark_missed(cutoff=300)
+        count = await repo.batch_mark_missed_date_jobs(cutoff=300)
         assert count == 2
 
         m1 = await repo.get_by_job_id("bm_1")
@@ -616,39 +611,58 @@ class TestScheduledMessageBatchMiss:
 
     @pytest.mark.asyncio
     async def test_batch_mark_missed_none_expired(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        await repo.save(_make_scheduled_msg("bm_none", trigger_time=99999))
-        count = await repo.batch_mark_missed(cutoff=100)
+        repo = ScheduledJobRepository()
+        await repo.save(_make_scheduled_job("bm_none", run_timestamp=99999))
+        count = await repo.batch_mark_missed_date_jobs(cutoff=100)
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_mark_skips_interval_jobs(self, in_memory_db):
+        """interval 类型的 job 不应被标记为 missed"""
+        repo = ScheduledJobRepository()
+        job = ScheduledJob(
+            job_id="interval_job",
+            task_name="some_recurring",
+            task_params={"key": "value"},
+            trigger_config={"type": "interval", "hours": 1, "minutes": 0, "seconds": 0, "days": 0},
+            user_id="user_1",
+            agent_id="agent_1",
+            status=ScheduledJobStatus.PENDING,
+            created_at=10,
+        )
+        await repo.save(job)
+
+        count = await repo.batch_mark_missed_date_jobs(cutoff=999999)
         assert count == 0
 
 
-class TestScheduledMessageQueryFilters:
-    """ScheduledMessageRepository 查询过滤测试"""
+class TestScheduledJobQueryFilters:
+    """ScheduledJobRepository 查询过滤测试"""
 
     @pytest.fixture
     async def seeded_repo(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        msgs = [
-            _make_scheduled_msg("q_1", user_id="u1", group_id="g1", trigger_time=100),
-            _make_scheduled_msg("q_2", user_id="u1", group_id="g1", trigger_time=200),
-            _make_scheduled_msg("q_3", user_id="u2", group_id="g2", trigger_time=300),
-            _make_scheduled_msg(
+        repo = ScheduledJobRepository()
+        jobs = [
+            _make_scheduled_job("q_1", user_id="u1", group_id="g1", run_timestamp=100),
+            _make_scheduled_job("q_2", user_id="u1", group_id="g1", run_timestamp=200),
+            _make_scheduled_job("q_3", user_id="u2", group_id="g2", run_timestamp=300),
+            _make_scheduled_job(
                 "q_4",
                 user_id="u1",
                 group_id="g1",
-                status=ScheduledMessageStatus.COMPLETED,
-                trigger_time=50,
+                status=ScheduledJobStatus.COMPLETED,
+                run_timestamp=50,
                 executed_at=60,
             ),
         ]
-        for m in msgs:
-            await repo.save(m)
+        for j in jobs:
+            await repo.save(j)
         return repo
 
     @pytest.mark.asyncio
     async def test_list_by_group(self, seeded_repo):
         result = await seeded_repo.list_by_group("g1", "agent_1")
-        job_ids = {m.job_id for m in result}
+        job_ids = {j.job_id for j in result}
         assert "q_1" in job_ids
         assert "q_2" in job_ids
         assert "q_4" in job_ids
@@ -656,36 +670,41 @@ class TestScheduledMessageQueryFilters:
 
     @pytest.mark.asyncio
     async def test_list_by_group_with_status(self, seeded_repo):
-        result = await seeded_repo.list_by_group("g1", "agent_1", status="pending")
-        for m in result:
-            assert m.status == "pending"
+        result = await seeded_repo.list_by_group("g1", "agent_1", status=ScheduledJobStatus.PENDING)
+        for j in result:
+            assert j.status == "pending"
 
     @pytest.mark.asyncio
     async def test_list_by_user(self, seeded_repo):
         result = await seeded_repo.list_by_user("u1", "agent_1")
-        for m in result:
-            assert m.user_id == "u1"
+        for j in result:
+            assert j.user_id == "u1"
 
     @pytest.mark.asyncio
     async def test_list_by_status(self, seeded_repo):
-        result = await seeded_repo.list_by_status("completed")
+        result = await seeded_repo.list_by_status(ScheduledJobStatus.COMPLETED)
         assert len(result) == 1
         assert result[0].job_id == "q_4"
 
     @pytest.mark.asyncio
     async def test_list_pending_by_agent(self, seeded_repo):
         result = await seeded_repo.list_pending(agent_id="agent_1")
-        for m in result:
-            assert m.status == "pending"
+        for j in result:
+            assert j.status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_list_by_task_name(self, seeded_repo):
+        result = await seeded_repo.list_by_task_name("send_static_message")
+        assert len(result) == 4
 
 
-class TestScheduledMessageDelete:
-    """ScheduledMessageRepository 删除操作测试"""
+class TestScheduledJobDelete:
+    """ScheduledJobRepository 删除操作测试"""
 
     @pytest.mark.asyncio
     async def test_delete_by_job_id(self, in_memory_db):
-        repo = ScheduledMessageRepository()
-        await repo.save(_make_scheduled_msg("to_del"))
+        repo = ScheduledJobRepository()
+        await repo.save(_make_scheduled_job("to_del"))
         assert await repo.get_by_job_id("to_del") is not None
 
         deleted = await repo.delete_by_job_id("to_del")
@@ -694,30 +713,30 @@ class TestScheduledMessageDelete:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent(self, in_memory_db):
-        repo = ScheduledMessageRepository()
+        repo = ScheduledJobRepository()
         deleted = await repo.delete_by_job_id("ghost_job")
         assert deleted is False
 
     @pytest.mark.asyncio
     async def test_cleanup_completed(self, in_memory_db):
-        repo = ScheduledMessageRepository()
+        repo = ScheduledJobRepository()
         await repo.save(
-            _make_scheduled_msg(
+            _make_scheduled_job(
                 "cl_1",
-                status=ScheduledMessageStatus.COMPLETED,
+                status=ScheduledJobStatus.COMPLETED,
                 executed_at=50,
-                trigger_time=40,
+                run_timestamp=40,
             )
         )
         await repo.save(
-            _make_scheduled_msg(
+            _make_scheduled_job(
                 "cl_2",
-                status=ScheduledMessageStatus.CANCELED,
+                status=ScheduledJobStatus.CANCELED,
                 executed_at=80,
-                trigger_time=70,
+                run_timestamp=70,
             )
         )
-        await repo.save(_make_scheduled_msg("cl_3", trigger_time=200))
+        await repo.save(_make_scheduled_job("cl_3", run_timestamp=200))
 
         cleaned = await repo.cleanup_completed(before=100)
         assert cleaned == 2

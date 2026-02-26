@@ -11,7 +11,7 @@ __all__ = [
     # 模型
     "MemoryItemTable",
     "UserPersona",
-    "ScheduledMessage",
+    "ScheduledJob",
     "ToolCallRecordTable",
     # 生命周期
     "init_db",
@@ -20,27 +20,27 @@ __all__ = [
     "BaseRepository",
     "MemoryItemRepository",
     "UserPersonaRepository",
-    "ScheduledMessageRepository",
+    "ScheduledJobRepository",
     "ToolCallRecordRepository",
     # Repository 单例
     "memory_item_repo",
     "user_persona_repo",
-    "scheduled_message_repo",
+    "scheduled_job_repo",
     "tool_call_record_repo",
 ]
 
 from .engine import ENGINE, WRITE_LOCK, SESSION_MAKER
-from .models import MemoryItemTable, UserPersona, ScheduledMessage, ToolCallRecordTable
+from .models import MemoryItemTable, UserPersona, ScheduledJob, ToolCallRecordTable
 from .lifecycle import init_db, shutdown_db
 from .repositories import (
     BaseRepository,
     MemoryItemRepository,
     UserPersonaRepository,
-    ScheduledMessageRepository,
+    ScheduledJobRepository,
     ToolCallRecordRepository,
 )
 
 memory_item_repo = MemoryItemRepository()
 user_persona_repo = UserPersonaRepository()
-scheduled_message_repo = ScheduledMessageRepository()
+scheduled_job_repo = ScheduledJobRepository()
 tool_call_record_repo = ToolCallRecordRepository()

@@ -21,6 +21,7 @@ def shutdown_lifecycle_tasks():
 
 
 async def auto_unbind_expired_media():
+    # 低精度任务，不用aps了
     while True:
         await asyncio.sleep(24 * 3600)  # 每24小时执行一次
         try:
