@@ -139,11 +139,10 @@ class TestTextResponseSend:
 
     @pytest.mark.asyncio
     @patch(
-        "nonebot_plugin_wtfllm.llm.response_models.convert_and_store_item",
+        "nonebot_plugin_wtfllm.llm.response_models.store_message_with_context",
         new_callable=AsyncMock,
     )
-    @patch("nonebot_plugin_wtfllm.llm.response_models.msg_tracker")
-    async def test_send_basic(self, mock_tracker, mock_store):
+    async def test_send_basic(self, mock_store):
         deps = _make_deps()
 
         # Mock UniMessage().send()
@@ -162,7 +161,6 @@ class TestTextResponseSend:
             await resp.send(deps)
 
             mock_store.assert_called_once()
-            mock_tracker.track.assert_called_once()
 
 
 class TestRejectResponseSend:
@@ -176,7 +174,7 @@ class TestRejectResponseSend:
 
         # 不应抛出异常
         with patch(
-            "nonebot_plugin_wtfllm.llm.response_models.convert_and_store_item",
+            "nonebot_plugin_wtfllm.llm.response_models.store_message_with_context",
             new_callable=AsyncMock,
         ) as mock_store:
             await resp.send(deps)
@@ -185,11 +183,10 @@ class TestRejectResponseSend:
 
     @pytest.mark.asyncio
     @patch(
-        "nonebot_plugin_wtfllm.llm.response_models.convert_and_store_item",
+        "nonebot_plugin_wtfllm.llm.response_models.store_message_with_context",
         new_callable=AsyncMock,
     )
-    @patch("nonebot_plugin_wtfllm.llm.response_models.msg_tracker")
-    async def test_send_visible_reject(self, mock_tracker, mock_store):
+    async def test_send_visible_reject(self, mock_store):
         deps = _make_deps()
 
         mock_receipt = MagicMock()
@@ -250,11 +247,10 @@ class TestSendableResponseSend:
     """SendableResponse.send() 工具链持久化逻辑测试"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_with_tool_chain(
-        self, mock_repo, mock_tracker, mock_store
+        self, mock_repo, mock_store
     ):
         """tool_chain 非空时调用 save_batch_from_tool_call_info"""
         deps = _make_deps()
@@ -282,11 +278,10 @@ class TestSendableResponseSend:
         mock_repo.save_empty_record.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_without_tool_chain(
-        self, mock_repo, mock_tracker, mock_store
+        self, mock_repo, mock_store
     ):
         """tool_chain 为空时调用 save_empty_record"""
         deps = _make_deps()
@@ -312,11 +307,10 @@ class TestSendableResponseSend:
         mock_repo.save_batch_from_tool_call_info.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_tool_chain_error_continues(
-        self, mock_repo, mock_tracker, mock_store
+        self, mock_repo, mock_store
     ):
         """save_batch 抛出 SQLAlchemyError 时仍继续调用 _perform_send"""
         from sqlalchemy.exc import SQLAlchemyError
@@ -338,9 +332,8 @@ class TestSendableResponseSend:
             # 不应抛出异常，_perform_send 仍应执行
             await resp.send(deps)
 
-        # 验证 _perform_send 仍被执行（store 和 track 被调用）
+        # 验证 _perform_send 仍被执行（store 被调用）
         mock_store.assert_called_once()
-        mock_tracker.track.assert_called_once()
 
 
 # ===================== 补充测试：TextResponse._perform_send =====================
@@ -366,10 +359,9 @@ class TestTextResponsePerformSend:
             await resp._perform_send(deps)
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-001")
-    async def test_basic_send(self, mock_ensure, mock_tracker, mock_store):
+    async def test_basic_send(self, mock_ensure, mock_store):
         """基础文本发送：无 meme、无 mentions"""
         deps = _make_deps()
 
@@ -393,24 +385,19 @@ class TestTextResponsePerformSend:
         mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
         mock_store.assert_called_once_with(
             agent_id="a1",
-            user_id="u1",
             uni_msg=mock_msg,
-            group_id="g1",
             sender="a1",
             msg_id="msg-001",
-        )
-        mock_tracker.track.assert_called_once_with(
-            agent_id="a1",
             user_id="u1",
             group_id="g1",
-            msg_id="msg-001",
+            track_message=True,
+            ingest_topic=True,
         )
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-002")
-    async def test_with_mentions(self, mock_ensure, mock_tracker, mock_store):
+    async def test_with_mentions(self, mock_ensure, mock_store):
         """mentions 列表非空时调用 resolve_aliases 并 at()"""
         deps = _make_deps()
         # resolve_aliases 返回解析后的别名
@@ -443,11 +430,10 @@ class TestTextResponsePerformSend:
             mock_msg.at.assert_any_call("resolved_bob")
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-003")
     async def test_with_meme_from_context(
-        self, mock_ensure, mock_tracker, mock_store
+        self, mock_ensure, mock_store
     ):
         """meme 设置后通过 context.resolve_media_ref 获取图片"""
         from nonebot_plugin_wtfllm.memory import ImageSegment
@@ -501,24 +487,21 @@ class TestRejectResponsePerformSend:
             await resp._perform_send(deps)
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
-    async def test_silent_reject(self, mock_tracker, mock_store):
-        """message_to_user=None 时不发送消息、不 store、不 track"""
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
+    async def test_silent_reject(self, mock_store):
+        """message_to_user=None 时不发送消息、不 store"""
         deps = _make_deps()
         resp = RejectResponse(reason="not relevant")
 
         await resp._perform_send(deps)
 
         mock_store.assert_not_called()
-        mock_tracker.track.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="rej-msg-001")
     async def test_show_user_reject(
-        self, mock_ensure, mock_tracker, mock_store
+        self, mock_ensure, mock_store
     ):
         """message_to_user 非空时发送消息"""
         deps = _make_deps()
@@ -547,17 +530,13 @@ class TestRejectResponsePerformSend:
         mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
         mock_store.assert_called_once_with(
             agent_id="a1",
-            user_id="u1",
             uni_msg=mock_msg,
-            group_id="g1",
             sender="a1",
             msg_id="rej-msg-001",
-        )
-        mock_tracker.track.assert_called_once_with(
-            agent_id="a1",
             user_id="u1",
             group_id="g1",
-            msg_id="rej-msg-001",
+            track_message=True,
+            ingest_topic=True,
         )
 
 
@@ -579,12 +558,11 @@ class TestMarkdownResponsePerformSend:
             await resp._perform_send(deps)
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="md-msg-001")
     @patch(f"{MODULE}.render_markdown_to_image", new_callable=AsyncMock)
     async def test_basic_send(
-        self, mock_render, mock_ensure, mock_tracker, mock_store
+        self, mock_render, mock_ensure, mock_store
     ):
         """基础 Markdown 渲染并发送图片"""
         deps = _make_deps()
@@ -625,17 +603,12 @@ class TestMarkdownResponsePerformSend:
         mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
         mock_store.assert_called_once_with(
             agent_id="a1",
-            user_id="u1",
             uni_msg=mock_msg,
-            group_id="g1",
             sender="a1",
             msg_id="md-msg-001",
-        )
-        mock_tracker.track.assert_called_once_with(
-            agent_id="a1",
             user_id="u1",
             group_id="g1",
-            msg_id="md-msg-001",
+            track_message=True,
         )
 
 
@@ -646,10 +619,9 @@ class TestTextResponseMemeUrl:
     """TextResponse meme 通过 URL 发送的路径"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-url-1")
-    async def test_meme_from_url(self, mock_ensure, mock_tracker, mock_store):
+    async def test_meme_from_url(self, mock_ensure, mock_store):
         """ImageSegment 有 url 无 local_path 时通过 URL 发送"""
         from nonebot_plugin_wtfllm.memory import ImageSegment
 
@@ -679,12 +651,11 @@ class TestTextResponseMemeFromRepo:
     """TextResponse meme 从 meme_repo 回退获取"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-repo-1")
     @patch(f"{MODULE}.meme_repo")
     async def test_meme_from_repo_found(
-        self, mock_meme_repo, mock_ensure, mock_tracker, mock_store
+        self, mock_meme_repo, mock_ensure, mock_store
     ):
         """resolve_media_ref 失败后从 meme_repo 获取成功"""
         deps = _make_deps()
@@ -713,12 +684,11 @@ class TestTextResponseMemeFromRepo:
             )
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-repo-2")
     @patch(f"{MODULE}.meme_repo")
     async def test_meme_from_repo_not_found(
-        self, mock_meme_repo, mock_ensure, mock_tracker, mock_store
+        self, mock_meme_repo, mock_ensure, mock_store
     ):
         """meme_repo 返回 None 时追加 '哎呀图丢了'"""
         deps = _make_deps()
@@ -739,12 +709,11 @@ class TestTextResponseMemeFromRepo:
             mock_msg.text.assert_any_call("\n哎呀图丢了")
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-repo-3")
     @patch(f"{MODULE}.meme_repo")
     async def test_meme_from_repo_error(
-        self, mock_meme_repo, mock_ensure, mock_tracker, mock_store
+        self, mock_meme_repo, mock_ensure, mock_store
     ):
         """meme_repo 抛出 OSError 时追加 '哎呀图丢了'"""
         deps = _make_deps()
@@ -768,11 +737,10 @@ class TestTextResponseWithReplySegments:
     """TextResponse 带 reply_segments 的路径"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-reply-1")
     async def test_reply_segments_appended(
-        self, mock_ensure, mock_tracker, mock_store
+        self, mock_ensure, mock_store
     ):
         deps = _make_deps()
         mock_reply = MagicMock()
@@ -796,11 +764,10 @@ class TestTextResponseWithExtraSegments:
     """TextResponse 带 extra_segments 的路径"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-extra-1")
     async def test_extra_segments_appended(
-        self, mock_ensure, mock_tracker, mock_store
+        self, mock_ensure, mock_store
     ):
         deps = _make_deps()
         mock_extra = MagicMock()
@@ -822,12 +789,11 @@ class TestMarkdownResponseWithReplyAndExtra:
     """MarkdownResponse 带 reply_segments + extra_segments"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="md-reply-1")
     @patch(f"{MODULE}.render_markdown_to_image", new_callable=AsyncMock)
     async def test_reply_and_extra_second_message(
-        self, mock_render, mock_ensure, mock_tracker, mock_store
+        self, mock_render, mock_ensure, mock_store
     ):
         """reply_segments + extra_segments 应产生第二条消息"""
         deps = _make_deps()
@@ -862,11 +828,10 @@ class TestRejectResponseWithExtraSegments:
     """RejectResponse 带 extra_segments"""
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
-    @patch(f"{MODULE}.msg_tracker")
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="rej-extra-1")
     async def test_extra_segments_appended_to_visible_reject(
-        self, mock_ensure, mock_tracker, mock_store
+        self, mock_ensure, mock_store
     ):
         deps = _make_deps()
         mock_extra = MagicMock()

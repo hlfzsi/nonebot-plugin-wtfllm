@@ -14,8 +14,7 @@ from ..memory import ImageSegment
 from ..db import tool_call_record_repo
 from ..v_db import meme_repo
 from .deps import AgentDeps
-from ..stream_processing import convert_and_store_item
-from ..msg_tracker import msg_tracker
+from ..stream_processing import store_message_with_context
 
 
 class SendableResponse(BaseModel, ABC):
@@ -109,19 +108,14 @@ class MarkdownResponse(SendableResponse):
 
         for content, receipt in zip(sent_messages_content, sent_messages_receipt):
             msg_id = ensure_msgid_from_receipt(receipt, context.nb_runtime.session)
-            await convert_and_store_item(
+            await store_message_with_context(
                 agent_id=context.ids.agent_id,
-                user_id=context.ids.user_id,
                 uni_msg=content,
-                group_id=context.ids.group_id,
                 sender=context.ids.agent_id,
                 msg_id=msg_id,
-            )
-            msg_tracker.track(
-                agent_id=context.ids.agent_id,
                 user_id=context.ids.user_id,
                 group_id=context.ids.group_id,
-                msg_id=msg_id,
+                track_message=True,
             )
 
 
@@ -198,19 +192,15 @@ class TextResponse(SendableResponse):
         sent_msg_id = ensure_msgid_from_receipt(
             sent_message, context.nb_runtime.session
         )
-        await convert_and_store_item(
+        await store_message_with_context(
             agent_id=context.ids.agent_id,
-            user_id=context.ids.user_id,
             uni_msg=msg,
-            group_id=context.ids.group_id,
             sender=context.ids.agent_id,
             msg_id=sent_msg_id,
-        )
-        msg_tracker.track(
-            agent_id=context.ids.agent_id,
             user_id=context.ids.user_id,
             group_id=context.ids.group_id,
-            msg_id=sent_msg_id,
+            track_message=True,
+            ingest_topic=True,
         )
 
 
@@ -257,19 +247,15 @@ class RejectResponse(SendableResponse):
                 sent_message, context.nb_runtime.session
             )
 
-            await convert_and_store_item(
+            await store_message_with_context(
                 agent_id=context.ids.agent_id,
-                user_id=context.ids.user_id,
                 uni_msg=msg,
-                group_id=context.ids.group_id,
                 sender=context.ids.agent_id,
                 msg_id=sent_msg_id,
-            )
-            msg_tracker.track(
-                agent_id=context.ids.agent_id,
                 user_id=context.ids.user_id,
                 group_id=context.ids.group_id,
-                msg_id=sent_msg_id,
+                track_message=True,
+                ingest_topic=True,
             )
 
 

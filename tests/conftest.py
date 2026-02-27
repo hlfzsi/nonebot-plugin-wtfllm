@@ -50,6 +50,13 @@ _mock_config.short_memory_time_minutes = 15
 _mock_config.short_memory_max_count = 10
 _mock_config.database_url = None
 
+# Topic 系统配置
+_mock_config.topic_enabled = True
+_mock_config.topic_cluster_threshold = 0.5
+_mock_config.topic_max_clusters = 30
+_mock_config.topic_decay_minutes = 120
+_mock_config.topic_max_context_messages = 10
+
 # Mock compress_agent_model_config
 _mock_compress_config = MagicMock()
 _mock_compress_config.api_key = "test_compress_key"

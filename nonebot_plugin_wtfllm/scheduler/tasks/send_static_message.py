@@ -20,12 +20,9 @@ class SendStaticMessageParams(BaseModel):
 @scheduled_task("send_static_message", SendStaticMessageParams)
 async def handle_send_static_message(params: SendStaticMessageParams) -> None:
     """发送预构建的 UniMessage 到指定目标。"""
-    # --- 延迟导入：避免 scheduler ↔ 业务层循环依赖 ---
     from nonebot_plugin_alconna import Target, UniMessage
-
-    from ...msg_tracker import msg_tracker
     from ...services.func.easy_ban import is_banned
-    from ...stream_processing import convert_and_store_item
+    from ...stream_processing import store_message_with_context
     from ...utils import logger, ensure_msgid_from_receipt
 
     if await is_banned(params.user_id, params.group_id):
@@ -39,19 +36,15 @@ async def handle_send_static_message(params: SendStaticMessageParams) -> None:
     sent_msg_id = ensure_msgid_from_receipt(receipt)
 
     if params.agent_id and params.user_id:
-        await convert_and_store_item(
+        await store_message_with_context(
             agent_id=params.agent_id,
             uni_msg=unimsg,
             group_id=params.group_id,
             user_id=params.user_id,
             sender=params.agent_id,
             msg_id=sent_msg_id,
-        )
-        msg_tracker.track(
-            agent_id=params.agent_id,
-            user_id=params.user_id,
-            group_id=params.group_id,
-            msg_id=sent_msg_id,
+            track_message=True,
+            ingest_topic=True,
         )
     else:
         logger.warning("Missing agent_id or user_id, skipping message tracking")

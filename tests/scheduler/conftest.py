@@ -34,6 +34,9 @@ for _mod in [
     "nonebot_plugin_wtfllm.scheduler.service",
     "nonebot_plugin_wtfllm.scheduler.tasks",
     "nonebot_plugin_wtfllm.scheduler.tasks.send_message",
+    "nonebot_plugin_wtfllm.stream_processing",
+    "nonebot_plugin_wtfllm.stream_processing.extract",
+    "nonebot_plugin_wtfllm.stream_processing.store_flow",
 ]:
     sys.modules.pop(_mod, None)
 
@@ -69,12 +72,8 @@ for mod_name in [
     if mod_name not in sys.modules:
         sys.modules[mod_name] = MagicMock()
 
-# --- 预注入 stream_processing ---
-_register_bare_package(
-    "nonebot_plugin_wtfllm.stream_processing", _SRC_DIR / "stream_processing"
-)
-if "nonebot_plugin_wtfllm.stream_processing.extract" not in sys.modules:
-    sys.modules["nonebot_plugin_wtfllm.stream_processing.extract"] = MagicMock()
+# --- 载入真实 stream_processing 包 ---
+_il.import_module("nonebot_plugin_wtfllm.stream_processing")
 
 # --- mock apscheduler ---
 if "apscheduler" not in sys.modules:

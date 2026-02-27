@@ -10,7 +10,10 @@ from nonebot_plugin_alconna import UniMessage, MsgId
 from .base import ToolGroupMeta
 from .utils import reschedule_deadline
 from ...deps import Context
-from ....stream_processing import extract_memoryitem_from_unimsg, convert_and_store_item
+from ....stream_processing import (
+    extract_memoryitem_from_unimsg,
+    store_message_with_context,
+)
 from ....memory import MemoryItemStream
 from ....msg_tracker import msg_tracker
 from ....utils import ensure_msgid_from_receipt
@@ -95,19 +98,15 @@ async def send(
         sent_msg_id = ensure_msgid_from_receipt(
             sent_message, ctx.deps.nb_runtime.session
         )
-        await convert_and_store_item(
+        await store_message_with_context(
             agent_id=ctx.deps.ids.agent_id,
-            user_id=ctx.deps.ids.user_id,
             uni_msg=msg,
-            group_id=ctx.deps.ids.group_id,
             sender=ctx.deps.ids.agent_id,
             msg_id=sent_msg_id,
-        )
-        msg_tracker.track(
-            agent_id=ctx.deps.ids.agent_id,
             user_id=ctx.deps.ids.user_id,
             group_id=ctx.deps.ids.group_id,
-            msg_id=sent_msg_id,
+            track_message=True,
+            ingest_topic=True,
         )
 
     async with asyncio.TaskGroup() as tg:
@@ -161,13 +160,15 @@ async def ask(
 
     sent_message = await msg.send(target=ctx.deps.nb_runtime.target)
     sent_msg_id = ensure_msgid_from_receipt(sent_message, ctx.deps.nb_runtime.session)
-    await convert_and_store_item(
+    await store_message_with_context(
         agent_id=ctx.deps.ids.agent_id,
-        user_id=ctx.deps.ids.user_id,
         uni_msg=msg,
-        group_id=ctx.deps.ids.group_id,
         sender=ctx.deps.ids.agent_id,
         msg_id=sent_msg_id,
+        user_id=ctx.deps.ids.user_id,
+        group_id=ctx.deps.ids.group_id,
+        track_message=True,
+        ingest_topic=True,
     )
     result = await wait.wait(timeout=timeout)
 
@@ -175,32 +176,17 @@ async def ask(
         return ToolReturn(return_value="用户未回复")
     else:
         uni_msg, reply_msg_id = result
-        await convert_and_store_item(
+        result_memory_item = await store_message_with_context(
             agent_id=ctx.deps.ids.agent_id,
-            user_id=ctx.deps.ids.user_id,
             uni_msg=uni_msg,
-            group_id=ctx.deps.ids.group_id,
             sender=ctx.deps.ids.user_id,
             msg_id=reply_msg_id,
+            user_id=ctx.deps.ids.user_id,
+            group_id=ctx.deps.ids.group_id,
+            track_message=True,
+            ingest_topic=True,
         )
         return_msg = "已收到回复"
-
-    result_msg, reply_msg_id = result
-
-    result_memory_item = extract_memoryitem_from_unimsg(
-        unimsg=result_msg,
-        sender=ctx.deps.ids.user_id,
-        group_id=ctx.deps.ids.group_id,
-        user_id=ctx.deps.ids.user_id,
-        agent_id=ctx.deps.ids.agent_id,
-        message_id=reply_msg_id,
-    )
-    msg_tracker.track(
-        agent_id=ctx.deps.ids.agent_id,
-        user_id=ctx.deps.ids.user_id,
-        group_id=ctx.deps.ids.group_id,
-        msg_id=str(reply_msg_id),
-    )
 
     new_builder = ctx.deps.context.copy(share_context=True, empty=True)
 

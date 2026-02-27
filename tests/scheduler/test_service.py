@@ -392,20 +392,20 @@ class TestRecoverPendingJobs:
 # 延迟导入后, patch 路径指向各函数/类的源模块
 _SRC_BAN = "nonebot_plugin_wtfllm.services.func.easy_ban.is_banned"
 _SRC_ENSURE = "nonebot_plugin_wtfllm.utils.ensure_msgid_from_receipt"
-_SRC_CONVERT = "nonebot_plugin_wtfllm.stream_processing.convert_and_store_item"
-_SRC_TRACKER = "nonebot_plugin_wtfllm.msg_tracker.msg_tracker"
+_SRC_STORE_WITH_CONTEXT = (
+    "nonebot_plugin_wtfllm.stream_processing.store_message_with_context"
+)
 _SRC_TARGET = "nonebot_plugin_alconna.Target"
 _SRC_UNIMSG = "nonebot_plugin_alconna.UniMessage"
 
 
 class TestSendStaticMessageHandler:
     @pytest.mark.asyncio
-    @patch(_SRC_TRACKER)
-    @patch(_SRC_CONVERT, new_callable=AsyncMock)
+    @patch(_SRC_STORE_WITH_CONTEXT, new_callable=AsyncMock)
     @patch(_SRC_ENSURE, return_value="sent_123")
     @patch(_SRC_BAN, new_callable=AsyncMock, return_value=False)
     async def test_success_flow(
-        self, mock_banned, mock_ensure, mock_convert, mock_tracker
+        self, mock_banned, mock_ensure, mock_store
     ):
         from nonebot_plugin_wtfllm.scheduler.tasks.send_static_message import (
             handle_send_static_message,
@@ -433,8 +433,7 @@ class TestSendStaticMessageHandler:
             await handle_send_static_message(params)
 
         mock_unimsg.send.assert_called_once_with(target=mock_target)
-        mock_convert.assert_called_once()
-        mock_tracker.track.assert_called_once()
+        mock_store.assert_called_once()
 
     @pytest.mark.asyncio
     @patch(_SRC_BAN, new_callable=AsyncMock, return_value=True)

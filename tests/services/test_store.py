@@ -21,36 +21,35 @@ def _make_session(user_id="u1", group_id=None):
 
 class TestStoreHandler:
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.try_enqueue_message")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.like_command", return_value=False)
     @patch(f"{MODULE}.set_alias_to_cache")
     @patch(f"{MODULE}.get_agent_id_from_bot", return_value="agent1")
     async def test_normal_flow(
-        self, mock_agent_id, mock_set_alias, mock_like, mock_convert, mock_enqueue
+        self, mock_agent_id, mock_set_alias, mock_like, mock_store
     ):
         bot = MagicMock()
         uni_msg = MagicMock()
         session = _make_session(user_id="u1", group_id="g1")
         msg_id = "msg_1"
 
-        mock_item = MagicMock()
-        mock_convert.return_value = mock_item
-
         await handle(bot, uni_msg, session, msg_id)
 
         mock_set_alias.assert_called_once_with(bot=bot, session=session)
-        mock_convert.assert_called_once()
-        mock_enqueue.assert_called_once_with(bot, session, mock_item)
+        mock_store.assert_called_once()
+        call_kwargs = mock_store.call_args.kwargs
+        assert call_kwargs["session"] is session
+        assert call_kwargs["bot"] is bot
+        assert call_kwargs["enqueue_to_agent_queue"] is True
+        assert call_kwargs["ingest_topic"] is True
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.try_enqueue_message")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.like_command", return_value=True)
     @patch(f"{MODULE}.set_alias_to_cache")
     @patch(f"{MODULE}.get_agent_id_from_bot", return_value="agent1")
     async def test_like_command_returns_early(
-        self, mock_agent_id, mock_set_alias, mock_like, mock_convert, mock_enqueue
+        self, mock_agent_id, mock_set_alias, mock_like, mock_store
     ):
         bot = MagicMock()
         uni_msg = MagicMock()
@@ -60,26 +59,22 @@ class TestStoreHandler:
         await handle(bot, uni_msg, session, msg_id)
 
         mock_set_alias.assert_called_once()
-        mock_convert.assert_not_called()
-        mock_enqueue.assert_not_called()
+        mock_store.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.try_enqueue_message")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.like_command", return_value=False)
     @patch(f"{MODULE}.set_alias_to_cache")
     @patch(f"{MODULE}.get_agent_id_from_bot", return_value="agent1")
     async def test_private_chat_no_group_id(
-        self, mock_agent_id, mock_set_alias, mock_like, mock_convert, mock_enqueue
+        self, mock_agent_id, mock_set_alias, mock_like, mock_store
     ):
         bot = MagicMock()
         uni_msg = MagicMock()
         session = _make_session(user_id="u1", group_id=None)
         msg_id = "msg_1"
 
-        mock_convert.return_value = MagicMock()
         await handle(bot, uni_msg, session, msg_id)
 
-        call_kwargs = mock_convert.call_args.kwargs
-        assert call_kwargs["group_id"] is None
-        assert call_kwargs["user_id"] == "u1"
+        call_kwargs = mock_store.call_args.kwargs
+        assert call_kwargs["session"] is session

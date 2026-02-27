@@ -125,6 +125,12 @@ async def handle(
             alias_provider=builder.ctx.alias_provider,
         )
 
+        if APP_CONFIG.topic_enabled:
+            chain.topic_context(
+                max_topic_messages=APP_CONFIG.topic_max_context_messages,
+                window_seconds=APP_CONFIG.message_track_time_minutes * 60,
+            )
+
         final_sources = await chain.resolve()
         builder.extend(final_sources)
 

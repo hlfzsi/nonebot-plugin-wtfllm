@@ -26,6 +26,7 @@ __all__ = [
     "KnowledgeSearchTask",
     "RecentReactTask",
     "ToolCallHistoryTask",
+    "TopicContextTask",
 ]
 
 from ._base import RetrievalTask
@@ -35,3 +36,4 @@ from .core_memory import CoreMemoryTask, CrossSessionMemoryTask
 from .knowledge import KnowledgeSearchTask
 from .recent_react import RecentReactTask
 from .tool_history import ToolCallHistoryTask
+from .topic_context import TopicContextTask

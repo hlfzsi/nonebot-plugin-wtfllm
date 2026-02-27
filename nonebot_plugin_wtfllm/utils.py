@@ -17,7 +17,6 @@ __all__ = [
     "init_http_client",
     "shutdown_http_client",
     "count_tokens",
-    "record_log",
 ]
 import uuid
 from pathlib import Path
@@ -67,13 +66,6 @@ _paths = [
 ]
 
 
-def record_log(message: str) -> None:
-    """记录日志到文件, 仅开发时使用, 发布包中不应包含此函数"""
-    log_file = get_plugin_data_dir() / "activity.log"
-    with log_file.open("a", encoding="utf-8") as f:
-        f.write(message + "\n")
-
-
 for path in _paths:
     path.mkdir(parents=True, exist_ok=True)
 
@@ -120,7 +112,7 @@ def ensure_msgid_from_receipt(
         msg_id = f"fake_{uuid.uuid4().hex}"
     else:
         msg_id = reply.id
-
+    # 无奈了，milky 根本没提供真实消息 ID
     return msg_id
 
 

@@ -1,0 +1,14 @@
+{
+    "model_type": "model2vec",
+    "architectures": [
+        "StaticModel"
+    ],
+    "tokenizer_name": "aspire/acge_text_embedding",
+    "apply_pca": 512,
+    "sif_coefficient": 0.0001,
+    "hidden_dim": 512,
+    "seq_length": 1000000,
+    "normalize": true,
+    "pooling": "mean",
+    "embedding_dtype": "float16"
+}

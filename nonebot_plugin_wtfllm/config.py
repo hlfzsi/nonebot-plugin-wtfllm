@@ -58,7 +58,7 @@ class Config(BaseModel):
     )
 
     short_memory_max_count: int = Field(
-        default=15,
+        default=10,
         description="默认注入的短期记忆最大条数。与时间窗口取交集（同时满足）",
     )
 
@@ -177,6 +177,27 @@ class Config(BaseModel):
     inertia_quantile_upper: float = Field(
         default=0.85,
         description="回归曲线上界分位数，越大越保守",
+    )
+
+    topic_enabled: bool = Field(
+        default=True,
+        description="是否启用话题聚类短期记忆增强",
+    )
+    topic_cluster_threshold: float = Field(
+        default=0.70,
+        description="话题聚类余弦相似度阈值，越大话题划分越细",
+    )
+    topic_max_clusters: int = Field(
+        default=15,
+        description="每个会话最大活跃话题数",
+    )
+    topic_decay_minutes: int = Field(
+        default=60,
+        description="话题不活跃超过此时间(分钟)后被清理",
+    )
+    topic_max_context_messages: int = Field(
+        default=10,
+        description="话题上下文检索的最大消息数",
     )
 
     def model_post_init(self, __context):

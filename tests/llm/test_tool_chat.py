@@ -103,13 +103,12 @@ class TestSend:
             await _send(ctx, message="msg")
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.msg_tracker")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="sent_id")
     @patch(f"{MODULE}.reschedule_deadline")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_sends_message_and_stores(
-        self, mock_build, mock_resched, mock_ensure, mock_convert, mock_tracker
+        self, mock_build, mock_resched, mock_ensure, mock_store
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -119,17 +118,15 @@ class TestSend:
         result = await _send(ctx, message="test msg")
         assert "已发送" in result
         mock_msg.send.assert_called_once()
-        mock_convert.assert_called_once()
-        mock_tracker.track.assert_called_once()
+        mock_store.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch(f"{MODULE}.msg_tracker")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="sent_id")
     @patch(f"{MODULE}.reschedule_deadline")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_reschedules_deadline(
-        self, mock_build, mock_resched, mock_ensure, mock_convert, mock_tracker
+        self, mock_build, mock_resched, mock_ensure, mock_store
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -162,16 +159,14 @@ class TestAsk:
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.MemoryItemStream")
-    @patch(f"{MODULE}.extract_memoryitem_from_unimsg")
-    @patch(f"{MODULE}.msg_tracker")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="sent_id")
     @patch(f"{MODULE}.reschedule_deadline")
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_timeout_returns_no_reply(
         self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_convert, mock_tracker, mock_extract, mock_stream,
+        mock_store, mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -188,16 +183,14 @@ class TestAsk:
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.MemoryItemStream")
-    @patch(f"{MODULE}.extract_memoryitem_from_unimsg", return_value=MagicMock())
-    @patch(f"{MODULE}.msg_tracker")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="sent_id")
     @patch(f"{MODULE}.reschedule_deadline")
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_receives_reply_and_returns_prompt(
         self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_convert, mock_tracker, mock_extract, mock_stream,
+        mock_store, mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -221,16 +214,14 @@ class TestAsk:
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.MemoryItemStream")
-    @patch(f"{MODULE}.extract_memoryitem_from_unimsg")
-    @patch(f"{MODULE}.msg_tracker")
-    @patch(f"{MODULE}.convert_and_store_item", new_callable=AsyncMock)
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="sent_id")
     @patch(f"{MODULE}.reschedule_deadline")
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_reschedules_deadline(
         self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_convert, mock_tracker, mock_extract, mock_stream,
+        mock_store, mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
