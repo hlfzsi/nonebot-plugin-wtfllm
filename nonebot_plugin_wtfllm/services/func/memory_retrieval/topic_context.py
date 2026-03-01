@@ -42,8 +42,9 @@ class TopicContextTask(RetrievalTask):
 
         stream = MemoryItemStream.create(
             items=items,
-            prefix="<topic_context>",
-            suffix="</topic_context>",
+            prefix="<current_session_topic_context>",
+            suffix="</current_session_topic_context>",
             role="topic_context",
+            priority=0.2,
         )
         return {stream}

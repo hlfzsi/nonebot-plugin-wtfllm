@@ -138,7 +138,7 @@ class TestMemoryItemStreamProperties:
     def test_priority_is_zero(self):
         """测试优先级为 0"""
         stream = MemoryItemStream.create()
-        assert stream.priority == 0
+        assert stream.priority == pytest.approx(0)
 
 
 class TestMemoryItemStreamOperations:

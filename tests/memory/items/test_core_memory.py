@@ -80,7 +80,7 @@ class TestCoreMemoryProperties:
 
     def test_priority(self):
         m = CoreMemory(content="test", agent_id="a1")
-        assert m.priority == 2
+        assert m.priority == pytest.approx(2)
 
     def test_sort_key(self):
         m = CoreMemory(
@@ -400,7 +400,7 @@ class TestCoreMemoryBlockProperties:
 
     def test_priority(self):
         block = CoreMemoryBlock()
-        assert block.priority == 2
+        assert block.priority == pytest.approx(2)
 
     def test_sort_key_empty(self):
         block = CoreMemoryBlock()

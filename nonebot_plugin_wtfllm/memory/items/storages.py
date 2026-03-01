@@ -18,6 +18,7 @@ class MemoryItemStream(BaseModel, MemorySource):
 
     _max_token: int | None = PrivateAttr(default=None)
     _role: str | None = PrivateAttr(default=None)
+    _priority: float = PrivateAttr(default=0)
 
     @classmethod
     def create(
@@ -27,7 +28,11 @@ class MemoryItemStream(BaseModel, MemorySource):
         suffix: str | None = None,
         items: List[MemoryItemUnion] | MemoryItemUnion | None = None,
         role: str | None = None,
+        priority: float = 0,
     ) -> Self:
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
         if items is None:
             items_list = []
         elif isinstance(items, list):
@@ -38,6 +43,7 @@ class MemoryItemStream(BaseModel, MemorySource):
         instance = cls(items=items_list, prefix=prefix, suffix=suffix)
         instance._max_token = max_token
         instance._role = role
+        instance._priority = priority
         return instance
 
     @property
@@ -61,8 +67,8 @@ class MemoryItemStream(BaseModel, MemorySource):
         return f"stream-{hash(id(self))}"
 
     @property
-    def priority(self) -> int:
-        return 0
+    def priority(self) -> float:
+        return 0 + self._priority
 
     @property
     def sort_key(self) -> tuple[int, str]:

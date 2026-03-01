@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import List, TYPE_CHECKING, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .base import MemorySource
 from .._types import ID_PATTERN
@@ -38,13 +38,39 @@ class CoreMemory(BaseModel, MemorySource):
         default_factory=list, description="相关的实体ID列表"
     )
 
+    _priority: float = PrivateAttr(default=0)
+
+    @classmethod
+    def create(
+        cls,
+        content: str,
+        agent_id: str,
+        group_id: str | None = None,
+        user_id: str | None = None,
+        source: str = "agent",
+        priority: float = 0,
+    ) -> "CoreMemory":
+        """工厂方法创建 CoreMemory 实例"""
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
+        instance = cls(
+            content=content,
+            agent_id=agent_id,
+            group_id=group_id,
+            user_id=user_id,
+            source=source,
+        )
+        instance._priority = priority
+        return instance
+
     @property
     def source_id(self) -> str:
         return f"core-memory-{self.storage_id}"
 
     @property
-    def priority(self) -> int:
-        return 2
+    def priority(self) -> float:
+        return 2 + self._priority
 
     @property
     def sort_key(self) -> Tuple[int, str]:
@@ -123,14 +149,34 @@ class CoreMemoryBlock(BaseModel, MemorySource):
     memories: List[CoreMemory] = Field(default_factory=list)
     prefix: str | None = Field(default=None)
     suffix: str | None = Field(default=None)
+    _priority: float = PrivateAttr(default=0)
+
+    @classmethod
+    def create(
+        cls,
+        memories: List[CoreMemory],
+        prefix: str | None = None,
+        suffix: str | None = None,
+        priority: float = 0,
+    ) -> "CoreMemoryBlock":
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
+        instance = cls(
+            memories=memories,
+            prefix=prefix,
+            suffix=suffix,
+        )
+        instance._priority = priority
+        return instance
 
     @property
     def source_id(self) -> str:
         return f"core-memory-block-{hash(id(self))}"
 
     @property
-    def priority(self) -> int:
-        return 2
+    def priority(self) -> float:
+        return 2 + self._priority
 
     @property
     def sort_key(self) -> Tuple[int, str]:

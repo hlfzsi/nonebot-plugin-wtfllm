@@ -99,6 +99,7 @@ class TestMainChatTask:
         stream = next(iter(result))
         assert isinstance(stream, MemoryItemStream)
         assert stream.role == "main_chat"
+        assert stream.priority == pytest.approx(0.1)
         assert len(stream.items) == 3
 
     @pytest.mark.asyncio
@@ -146,6 +147,7 @@ class TestCoreMemoryTask:
         assert isinstance(block, CoreMemoryBlock)
         assert len(block.memories) == 3
         assert block.prefix == "<core_memory>"
+        assert block.priority == pytest.approx(2)
 
     @pytest.mark.asyncio
     @patch(f"{CORE_MEM_MODULE}.core_memory_repo")
@@ -230,6 +232,7 @@ class TestKnowledgeSearchTask:
         block = next(iter(result))
         assert isinstance(block, KnowledgeBlock)
         assert len(block.entries) == 3
+        assert block.priority == pytest.approx(3)
 
     @pytest.mark.asyncio
     @patch(f"{KNOWLEDGE_MODULE}.knowledge_base_repo")
@@ -295,6 +298,7 @@ class TestToolCallHistoryTask:
         block = next(iter(result))
         assert isinstance(block, ToolCallSummaryBlock)
         assert set(block.tool_names) == {"search", "save"}
+        assert block.priority == pytest.approx(1)
 
     @pytest.mark.asyncio
     @patch(f"{TOOL_MODULE}.tool_call_record_repo")
@@ -337,6 +341,7 @@ class TestRecentReactTask:
         assert len(result) == 2
         for stream in result:
             assert isinstance(stream, MemoryItemStream)
+            assert stream.priority == pytest.approx(0.3)
 
     @pytest.mark.asyncio
     async def test_empty_recent_react(self):
@@ -383,3 +388,23 @@ class TestRecentReactTask:
 
         stream = next(iter(result))
         assert '私聊' in stream.prefix
+
+
+class TestMemorySourcePriorityContract:
+    def test_global_order_matches_product_expectation(self):
+        """排序契约: 知识 > 核心记忆 > 工具 > 最近交互 > 主题补充 > 主对话流"""
+        knowledge = KnowledgeBlock(entries=_make_knowledge_entries(1))
+        core = CoreMemoryBlock(memories=_make_core_memories(1))
+        tool = ToolCallSummaryBlock(tool_names=["search"])
+
+        items = _make_group_items(1)
+        recent = MemoryItemStream.create(items=items, priority=0.3)
+        topic = MemoryItemStream.create(items=items, role="topic_context", priority=0.2)
+        main_chat = MemoryItemStream.create(items=items, role="main_chat", priority=0.1)
+
+        sources = [main_chat, topic, recent, tool, core, knowledge]
+        sorted_sources = sorted(
+            sources, key=lambda x: (-x.priority, x.sort_key[0], x.sort_key[1])
+        )
+
+        assert sorted_sources == [knowledge, core, tool, recent, topic, main_chat]

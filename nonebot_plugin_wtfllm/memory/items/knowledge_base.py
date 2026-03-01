@@ -1,8 +1,8 @@
 import time
 import uuid
-from typing import List, TYPE_CHECKING, Tuple
+from typing import List, Self, TYPE_CHECKING, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .base import MemorySource
 
@@ -34,14 +34,44 @@ class KnowledgeEntry(BaseModel, MemorySource):
     source_session_id: str | None = Field(default=None, description="来源会话ID")
     tags: List[str] = Field(default_factory=list, description="标签列表")
     token_count: int = Field(default=0, description="缓存的 token 计数")
+    _priority: float = PrivateAttr(default=0)
+
+    @classmethod
+    def create(
+        cls,
+        content: str,
+        title: str,
+        agent_id: str,
+        category: str = "general",
+        source_session_type: str = "agent",
+        source_session_id: str | None = None,
+        tags: List[str] | None = None,
+        token_count: int = 0,
+        priority: float = 0,
+    ) -> Self:
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
+        instance = cls(
+            content=content,
+            title=title,
+            category=category,
+            agent_id=agent_id,
+            source_session_type=source_session_type,
+            source_session_id=source_session_id,
+            tags=tags or [],
+            token_count=token_count,
+        )
+        instance._priority = priority
+        return instance
 
     @property
     def source_id(self) -> str:
         return f"knowledge-{self.storage_id}"
 
     @property
-    def priority(self) -> int:
-        return 1
+    def priority(self) -> float:
+        return 3 + self._priority
 
     @property
     def sort_key(self) -> Tuple[int, str]:
@@ -65,14 +95,30 @@ class KnowledgeBlock(BaseModel, MemorySource):
     entries: List[KnowledgeEntry] = Field(default_factory=list)
     prefix: str | None = Field(default=None)
     suffix: str | None = Field(default=None)
+    _priority: float = PrivateAttr(default=0)
+
+    @classmethod
+    def create(
+        cls,
+        entries: List[KnowledgeEntry],
+        prefix: str | None = None,
+        suffix: str | None = None,
+        priority: float = 0,
+    ) -> Self:
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
+        instance = cls(entries=entries, prefix=prefix, suffix=suffix)
+        instance._priority = priority
+        return instance
 
     @property
     def source_id(self) -> str:
         return f"knowledge-block-{hash(id(self))}"
 
     @property
-    def priority(self) -> int:
-        return 1
+    def priority(self) -> float:
+        return 3 + self._priority
 
     @property
     def sort_key(self) -> Tuple[int, str]:

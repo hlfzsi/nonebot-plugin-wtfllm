@@ -74,6 +74,21 @@ class TestKnowledgeEntryCreate:
         e2 = KnowledgeEntry(content="b", title="b", agent_id="a1")
         assert e1.storage_id != e2.storage_id
 
+    def test_factory_create_with_priority(self):
+        e = KnowledgeEntry.create(
+            content="工厂创建内容",
+            title="工厂标题",
+            agent_id="a1",
+            priority=0.2,
+        )
+        assert e.content == "工厂创建内容"
+        assert e.title == "工厂标题"
+        assert e.priority == pytest.approx(3.2)
+
+    def test_factory_create_invalid_priority(self):
+        with pytest.raises(ValueError, match="priority must be between 0 and 1"):
+            KnowledgeEntry.create(content="x", title="t", agent_id="a1", priority=1)
+
 
 class TestKnowledgeEntryProperties:
     """KnowledgeEntry 属性测试"""
@@ -84,7 +99,7 @@ class TestKnowledgeEntryProperties:
 
     def test_priority(self):
         e = _make_entry()
-        assert e.priority == 1
+        assert e.priority == pytest.approx(3)
 
     def test_sort_key(self):
         e = _make_entry(updated_at=12345)
@@ -184,6 +199,14 @@ class TestKnowledgeBlockCreate:
         assert block.prefix == "[开始]"
         assert block.suffix == "[结束]"
 
+    def test_factory_create_with_priority(self):
+        block = KnowledgeBlock.create(entries=[_make_entry()], priority=0.3)
+        assert block.priority == pytest.approx(3.3)
+
+    def test_factory_create_invalid_priority(self):
+        with pytest.raises(ValueError, match="priority must be between 0 and 1"):
+            KnowledgeBlock.create(entries=[], priority=1)
+
 
 class TestKnowledgeBlockProperties:
     """KnowledgeBlock 属性测试"""
@@ -194,7 +217,7 @@ class TestKnowledgeBlockProperties:
 
     def test_priority(self):
         block = KnowledgeBlock()
-        assert block.priority == 1
+        assert block.priority == pytest.approx(3)
 
     def test_sort_key_empty(self):
         block = KnowledgeBlock()

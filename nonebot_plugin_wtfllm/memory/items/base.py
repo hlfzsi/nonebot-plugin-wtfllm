@@ -1,6 +1,6 @@
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Tuple
+from typing import TYPE_CHECKING, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -9,11 +9,14 @@ from ..content import Message, MentionSegment, ForwardSegment
 if TYPE_CHECKING:
     from ..context import LLMContext
 
-SCOPE = Literal["private", "group"]
-
 
 class MemorySource(ABC):
-    """记忆源抽象基类"""
+    """记忆源抽象基类
+
+    排序时遵循两级规则：
+    1) ``priority``：粗粒度优先级，决定不同记忆源类型的前后层级；
+    2) ``sort_key``：细粒度排序键，仅在同 ``priority`` 下比较，保证稳定顺序。
+    """
 
     @property
     def role(self) -> str | None:
@@ -28,15 +31,18 @@ class MemorySource(ABC):
 
     @property
     @abstractmethod
-    def priority(self) -> int:
-        """优先级, 数值越大优先级越高, 用于排序"""
+    def priority(self) -> float:
+        """优先级，数值越大越靠前。
+
+        建议实现为「基础优先级 + 可调偏移（如私有属性 _priority）」。
+        """
         ...
 
     @property
     @abstractmethod
     def sort_key(self) -> Tuple[float, str]:
         """
-        用于排序
+        同优先级内的排序键（通常为时间戳 + 稳定ID）。
 
         Returns:
             Tuple[第一条件, 第二条件]

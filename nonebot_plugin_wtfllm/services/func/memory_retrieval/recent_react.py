@@ -43,6 +43,7 @@ class RecentReactTask(RetrievalTask):
                 prefix=f'<memory scene="{scene_name}">',
                 suffix="</memory>",
                 max_token=self.max_token_per_stream,
+                priority=0.3,
             )
             sources.add(stream)
 

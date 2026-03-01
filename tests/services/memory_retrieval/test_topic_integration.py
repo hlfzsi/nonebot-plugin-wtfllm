@@ -87,6 +87,7 @@ class TestTopicIntegration:
         stream = result.pop()
         assert isinstance(stream, MemoryItemStream)
         assert stream._role == "topic_context"
+        assert stream.priority == pytest.approx(0.2)
         assert len(stream.items) == len(msg_ids)
 
     @pytest.mark.asyncio

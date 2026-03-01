@@ -13,13 +13,31 @@ class TestToolCallSummaryProperties:
 
     def test_priority(self):
         block = ToolCallSummaryBlock()
-        assert block.priority == 1
+        assert block.priority == pytest.approx(1)
 
     def test_sort_key(self):
         block = ToolCallSummaryBlock()
         key = block.sort_key
         assert key[0] == 0
         assert key[1] == block.source_id
+
+
+class TestToolCallSummaryCreate:
+    def test_factory_create_with_priority(self):
+        block = ToolCallSummaryBlock.create(
+            tool_names=["search", "calc"],
+            prefix="Tools",
+            suffix="End",
+            priority=0.4,
+        )
+        assert block.tool_names == ["search", "calc"]
+        assert block.prefix == "Tools"
+        assert block.suffix == "End"
+        assert block.priority == pytest.approx(1.4)
+
+    def test_factory_create_invalid_priority(self):
+        with pytest.raises(ValueError, match="priority must be between 0 and 1"):
+            ToolCallSummaryBlock.create(priority=1)
 
 
 class TestToolCallSummaryHash:

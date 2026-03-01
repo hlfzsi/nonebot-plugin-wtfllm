@@ -1,6 +1,6 @@
-from typing import List, TYPE_CHECKING, Tuple
+from typing import List, Self, TYPE_CHECKING, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .base import MemorySource
 
@@ -14,14 +14,30 @@ class ToolCallSummaryBlock(BaseModel, MemorySource):
     tool_names: List[str] = Field(default_factory=list)
     prefix: str | None = Field(default=None)
     suffix: str | None = Field(default=None)
+    _priority: float = PrivateAttr(default=0)
+
+    @classmethod
+    def create(
+        cls,
+        tool_names: List[str] | None = None,
+        prefix: str | None = None,
+        suffix: str | None = None,
+        priority: float = 0,
+    ) -> Self:
+        if not (0 <= priority < 1):
+            raise ValueError("priority must be between 0 and 1(no inclusive)")
+
+        instance = cls(tool_names=tool_names or [], prefix=prefix, suffix=suffix)
+        instance._priority = priority
+        return instance
 
     @property
     def source_id(self) -> str:
         return f"tool-call-summary-{hash(id(self))}"
 
     @property
-    def priority(self) -> int:
-        return 1
+    def priority(self) -> float:
+        return 1 + self._priority
 
     @property
     def sort_key(self) -> Tuple[int, str]:
