@@ -6,7 +6,7 @@ from nonebot_plugin_alconna import MsgId, UniMessage
 
 from ..msg_tracker import msg_tracker
 from ..topic import topic_manager
-from ..utils import APP_CONFIG
+from ..utils import APP_CONFIG, extract_session_info
 from .extract import convert_and_store_item
 
 if TYPE_CHECKING:
@@ -28,8 +28,9 @@ async def store_message_with_context(
     ingest_topic: bool = False,
 ) -> "MemoryItemUnion":
     if session is not None:
-        resolved_user_id = session.user.id
-        resolved_group_id = session.group.id if session.group else None
+        info = extract_session_info(session)
+        resolved_user_id = info["user_id"]
+        resolved_group_id = info["group_id"]
     else:
         resolved_user_id = user_id
         resolved_group_id = group_id

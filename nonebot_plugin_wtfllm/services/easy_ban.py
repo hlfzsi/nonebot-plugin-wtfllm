@@ -10,7 +10,7 @@ from .func.easy_ban import (
     get_banned_users,
     get_banned_groups,
 )
-from ..utils import APP_CONFIG
+from ..utils import APP_CONFIG, extract_session_info
 
 
 async def _perm(session: Uninfo) -> bool:
@@ -83,8 +83,9 @@ async def handle_user_list():
 @easyban_cmd.assign("group.add")
 async def handle_group_add(group_id: Match[str], session: Uninfo):
     _group = group_id.result if group_id.available else None
-    if _group is None and session.group:
-        _group = str(session.group.id)
+    if _group is None:
+        info = extract_session_info(session)
+        _group = info["group_id"]
 
     if not _group:
         await easyban_cmd.finish("请提供需要限制的群组ID，或者在群组中使用该命令哦~")
@@ -96,8 +97,9 @@ async def handle_group_add(group_id: Match[str], session: Uninfo):
 @easyban_cmd.assign("group.remove")
 async def handle_group_remove(group_id: Match[str], session: Uninfo):
     _group = group_id.result if group_id.available else None
-    if _group is None and session.group:
-        _group = str(session.group.id)
+    if _group is None:
+        info = extract_session_info(session)
+        _group = info["group_id"]
 
     if not _group:
         await easyban_cmd.finish(

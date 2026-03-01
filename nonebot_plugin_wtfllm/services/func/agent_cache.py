@@ -11,6 +11,7 @@ from .message_queue import (
     remove_queue,
     get_queue,
 )
+from ...utils import extract_session_info
 
 if TYPE_CHECKING:
     from ...memory import MemoryItemUnion
@@ -26,15 +27,16 @@ _group_alias_cache: LRUCache[GroupID, Alias] = LRUCache(maxsize=100)
 
 def get_handle_key(bot: Bot, session: Uninfo) -> str:
     adapter = bot.adapter.get_name()
-    group_part = session.group.id if session.group else "private"
-    return f"{adapter}:{bot.self_id}:{session.user.id}:{group_part}"
+    info = extract_session_info(session)
+    group_part = info["group_id"] or "private"
+    return f"{adapter}:{bot.self_id}:{info['user_id']}:{group_part}"
 
 
 def get_conv_key(bot: Bot, session: Uninfo) -> str:
     """生成会话级别的队列键（群聊按 group_id，私聊按 user_id）"""
     adapter = bot.adapter.get_name()
-    group_id = session.group.id if session.group else None
-    return get_conversation_key(adapter, bot.self_id, group_id, session.user.id)
+    info = extract_session_info(session)
+    return get_conversation_key(adapter, bot.self_id, info["group_id"], info["user_id"])
 
 
 @contextmanager
@@ -66,9 +68,10 @@ def try_enqueue_message(bot: Bot, session: Uninfo, item: "MemoryItemUnion") -> b
 
 def get_alias_cache_main_key(bot: Bot, session: Uninfo) -> str:
     adapter = bot.adapter.get_name()
-    if session.group:
-        return f"{adapter}:{bot.self_id}:g:{session.group.id}"
-    return f"{adapter}:{bot.self_id}:p:{session.user.id}"
+    info = extract_session_info(session)
+    if info["group_id"]:
+        return f"{adapter}:{bot.self_id}:g:{info['group_id']}"
+    return f"{adapter}:{bot.self_id}:p:{info['user_id']}"
 
 
 def get_alias_from_cache(bot: Bot, session: Uninfo) -> Dict[UserOrGroupID, Alias]:
@@ -90,8 +93,8 @@ def set_alias_to_cache(bot: Bot, session: Uninfo) -> None:
         current_aliases[session.user.id] = user_alias
         changed = True
 
-    if session.group and session.group.name:
-        _group_alias_cache[session.group.id] = session.group.name
+    if not session.scene.is_private and session.scene.name:
+        _group_alias_cache[session.scene_path] = session.scene.name
 
     if changed:
         _alias_cache[main_key] = current_aliases

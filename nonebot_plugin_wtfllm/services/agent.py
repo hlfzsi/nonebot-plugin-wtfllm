@@ -18,7 +18,7 @@ from .func.message_queue import get_queue
 from ..llm.agents import CHAT_AGENT
 from ..llm.deps import AgentDeps, IDs, NonebotRuntime
 from ..memory import MemoryContextBuilder
-from ..utils import APP_CONFIG, logger, get_agent_id_from_bot
+from ..utils import APP_CONFIG, logger, get_agent_id_from_bot, extract_session_info
 from ..db import user_persona_repo
 from ..abilities import attention_router
 from ..msg_tracker import msg_tracker
@@ -35,11 +35,15 @@ async def handle(
     message_id: MsgId,
     is_to_me: bool = EventToMe(),
 ):
-    if await is_banned(session.user.id, session.group.id if session.group else None):
+    session_info = extract_session_info(session)
+    usable_user_id = session_info["user_id"]
+    usable_group_id = session_info["group_id"]
+    
+    if await is_banned(usable_user_id, usable_group_id):
         agent_id = get_agent_id_from_bot(session)
         attention_router.remove_poi(
-            user_id=session.user.id,
-            group_id=session.group.id if session.group else None,
+            user_id=usable_user_id,
+            group_id=usable_group_id,
             agent_id=agent_id,
         )
         return
@@ -55,18 +59,18 @@ async def handle(
         agent_id = get_agent_id_from_bot(session)
         cached_aliases[agent_id] = APP_CONFIG.bot_name
         poi = attention_router.get_and_consume_poi(
-            user_id=session.user.id,
-            group_id=session.group.id if session.group else None,
+            user_id=usable_user_id,
+            group_id=usable_group_id,
             agent_id=agent_id,
         )
         if not is_to_me and not poi:
             return
 
         persona = await user_persona_repo.get_persona_text(
-            user_id=cached_aliases[session.user.id], real_user_id=session.user.id
+            user_id=cached_aliases[usable_user_id], real_user_id=usable_user_id
         )
         suffix = (
-            f'<user_persona user="{cached_aliases[session.user.id]}">\n{persona}\n</user_persona>\n'
+            f'<user_persona user="{cached_aliases[usable_user_id]}">\n{persona}\n</user_persona>\n'
             if persona
             else ""
         )
@@ -75,7 +79,7 @@ async def handle(
 
         builder = MemoryContextBuilder(
             prefix_prompt=(
-                f"Current Scene: {cached_aliases.get(session.group.id, 'Private Chat') if session.group else 'Private Chat'}"
+                f"Current Scene: {cached_aliases.get(usable_group_id, 'Private Chat') if usable_group_id else 'Private Chat'}"
             ),
             suffix_prompt=suffix,
             agent_id=agent_id,
@@ -84,32 +88,32 @@ async def handle(
 
         msg_tracker.track(
             agent_id=agent_id,
-            user_id=session.user.id,
-            group_id=session.group.id if session.group else None,
+            user_id=usable_user_id,
+            group_id=usable_group_id,
             msg_id=message_id,
         )
 
         recent_react = msg_tracker.get(
-            user_id=session.user.id,
+            user_id=usable_user_id,
             agent_id=agent_id,
         )
-        recent_react.pop(session.group.id if session.group else "", None)
+        recent_react.pop(usable_group_id if usable_group_id else "", None)
         for gid in recent_react.keys():
             if gid:
                 builder.ctx.alias_provider.register_group(gid)
 
         query = uni_msg.extract_plain_text()
 
-        if session.group:
+        if usable_group_id:
             chain = RetrievalChain(
                 agent_id=agent_id,
-                group_id=session.group.id,
+                group_id=usable_group_id,
                 query=query,
             )
         else:
             chain = RetrievalChain(
                 agent_id=agent_id,
-                user_id=session.user.id,
+                user_id=usable_user_id,
                 query=query,
             )
 
@@ -139,8 +143,8 @@ async def handle(
         queue = get_queue(conv_key)
         deps = AgentDeps(
             ids=IDs(
-                user_id=session.user.id,
-                group_id=session.group.id if session.group else None,
+                user_id=usable_user_id,
+                group_id=usable_group_id,
                 agent_id=agent_id,
             ),
             context=builder,

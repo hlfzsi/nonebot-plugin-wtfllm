@@ -29,7 +29,7 @@ core_group = ToolGroupMeta(
 )
 
 
-@core_group.tool(cost=0)
+@core_group.tool(cost=1)
 def reinforce_persona_anchor(ctx: Context) -> str:
     """
     获取当前人设配置
@@ -325,7 +325,7 @@ async def get_full_message_detail(ctx: Context, message_ref: int) -> str:
     """
     获取消息的完整细节信息，包括文本内容。
     当记忆中的消息被省略或压缩展示时，调用此工具查看完整文本。
-    不鼓励频繁调用，仅在确实需要查看完整消息内容时使用。
+    不鼓励调用，仅在确实需要查看完整消息内容时使用。
 
     Args:
         message_ref: 消息引用ID, 如 1

@@ -102,8 +102,12 @@ def _make_session(user_id="u1", group_id=None, self_id="llonebot:agent1"):
     s.user.id = user_id
     s.self_id = self_id
     if group_id:
+        s.scene.is_private = False
+        s.scene_path = group_id
         s.group.id = group_id
     else:
+        s.scene.is_private = True
+        s.scene_path = user_id
         s.group = None
     return s
 

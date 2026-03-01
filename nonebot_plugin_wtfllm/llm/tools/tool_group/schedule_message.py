@@ -99,7 +99,7 @@ async def schedule_message(
     mentions: List[str] | None = None,
     meme: str | None = None,
 ) -> str | None:
-    """创建定时消息。
+    """创建静态的定时消息。
 
     创建一条在指定时间发送的消息，支持文本、@提及和表情包。
 
@@ -187,7 +187,7 @@ async def schedule_message(
 async def schedule_agent_task(
     ctx: Context, schedule_config: TimeConfig, instruction: str
 ) -> str:
-    """在指定时间触发执行由你介入的特定任务。仅必要时使用。
+    """在指定时间触发执行由你介入的动态任务。
 
     设置一个延时任务，在到达指定时间后，系统会以 `instruction` 作为输入
     再次唤起你。这适用于提醒、定时检查或需要在未来某个时间点执行的复杂操作。

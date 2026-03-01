@@ -17,11 +17,12 @@ __all__ = [
     "init_http_client",
     "shutdown_http_client",
     "count_tokens",
+    "extract_session_info",
 ]
 import uuid
 from pathlib import Path
 from importlib import resources
-from typing import Final
+from typing import Final, TypedDict
 
 import httpx
 import tiktoken
@@ -145,3 +146,20 @@ async def shutdown_http_client() -> None:
 def count_tokens(text: str) -> int:
     """计算文本的 token 数"""
     return len(_tiktoken_encoding.encode(text))
+
+
+class SessionInfo(TypedDict):
+    user_id: str
+    group_id: str | None
+
+
+def extract_session_info(session: Session) -> SessionInfo:
+    """从 Session 中提取 ID"""
+    # guild 和 channel 的专门支持还是洗洗睡吧，多少有点折磨
+    is_private = False
+    if "private" in session.scene_path:  # llob下satori行为，私聊会给 group_id
+        is_private = True
+    if session.scene.is_private or is_private:
+        return SessionInfo(user_id=session.user.id, group_id=None)
+    else:
+        return SessionInfo(user_id=session.user.id, group_id=session.scene_path)

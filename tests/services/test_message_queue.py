@@ -110,8 +110,12 @@ def _make_bot_and_session(adapter="qq", bot_id="bot1", user_id="u1", group_id="g
     session = MagicMock()
     session.user.id = user_id
     if group_id:
+        session.scene.is_private = False
+        session.scene_path = group_id
         session.group.id = group_id
     else:
+        session.scene.is_private = True
+        session.scene_path = user_id
         session.group = None
 
     return bot, session

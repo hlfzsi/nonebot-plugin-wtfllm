@@ -29,9 +29,14 @@ def _make_bot_session(
     session.user.nick = nick
     session.user.name = name
     if group_id:
+        session.scene.is_private = False
+        session.scene_path = group_id
+        session.scene.name = group_name
         session.group.id = group_id
         session.group.name = group_name
     else:
+        session.scene.is_private = True
+        session.scene_path = user_id
         session.group = None
     return bot, session
 

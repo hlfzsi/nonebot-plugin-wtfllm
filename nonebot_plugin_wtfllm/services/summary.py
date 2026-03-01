@@ -5,7 +5,7 @@ from nonebot_plugin_alconna import on_alconna, Match, Query
 from nonebot_plugin_uninfo import Uninfo
 
 from ..memory._types import ID_PATTERN
-from ..utils import APP_CONFIG
+from ..utils import APP_CONFIG, extract_session_info
 from ..v_db import core_memory_repo
 
 
@@ -48,8 +48,9 @@ async def handle_summary(
 
     if opt_group_id.available:
         _group = opt_group_id.result
-    elif session.group:
-        _group = str(session.group.id)
+    else:
+        info = extract_session_info(session)
+        _group = info["group_id"]
 
     agent_id = session.self_id.removeprefix("llonebot:").removeprefix("napcat:")
 

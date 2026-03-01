@@ -6,7 +6,7 @@ from nonebot_plugin_alconna import MsgId, OriginalUniMsg
 from nonebot_plugin_uninfo import Uninfo
 
 from .func import set_alias_to_cache, like_command
-from ..utils import get_agent_id_from_bot
+from ..utils import get_agent_id_from_bot, extract_session_info
 from ..stream_processing import store_message_with_context
 
 matcher = on_message(block=False, priority=98)  # 避免其他插件指令消息影响
@@ -20,6 +20,7 @@ async def handle(
     msg_id: MsgId,
 ) -> None:
     agent_id = get_agent_id_from_bot(session)
+    info = extract_session_info(session)
 
     set_alias_to_cache(bot=bot, session=session)
 
@@ -29,7 +30,7 @@ async def handle(
     await store_message_with_context(
         agent_id=agent_id,
         uni_msg=uni_msg,
-        sender=session.user.id,
+        sender=info["user_id"],
         msg_id=msg_id,
         session=session,
         bot=bot,

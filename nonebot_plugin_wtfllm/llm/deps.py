@@ -1,7 +1,6 @@
 import asyncio
-from typing import Dict, List, Optional, Set, Annotated
+from typing import Dict, List, Optional, Set, Annotated, Any
 
-from mistralai import Any
 from nonebot.adapters import Bot
 from nonebot_plugin_uninfo import Uninfo
 from nonebot_plugin_alconna import Target, UniMessage
@@ -70,9 +69,7 @@ class AgentDeps(BaseModel):
         default=0, description="工具点数预算总量，0 表示不启用"
     )
 
-    tool_points_used: int = Field(
-        default=0, description="当前对话中已消耗的工具点数"
-    )
+    tool_points_used: int = Field(default=0, description="当前对话中已消耗的工具点数")
 
     caches: Dict[Any, Any] = Field(
         default_factory=dict, description="当前对话的临时缓存"
