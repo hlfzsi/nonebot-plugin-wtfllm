@@ -15,7 +15,7 @@ from ....memory.items.storages import MemoryItemStream
 from ....memory.items.core_memory import CoreMemoryBlock
 from ....memory.items.knowledge_base import KnowledgeBlock
 from ....db import memory_item_repo, tool_call_record_repo
-from ....v_db import core_memory_repo, knowledge_base_repo
+from ....v_db import core_memory_repo, knowledge_base_repo, topic_archive_repo
 from ....abilities import (
     attention_router,
     PoiInfo,
@@ -384,15 +384,25 @@ async def query_memory(
         limit=limit,
     )
 
+    topic_coro = topic_archive_repo.search_by_session(
+        agent_id=ctx.deps.ids.agent_id, query=query, limit=1
+    )
+
     if core_coro is not None:
         async with asyncio.TaskGroup() as tg:
             core_task = tg.create_task(core_coro)
             knowledge_task = tg.create_task(knowledge_coro)
+            topic_task = tg.create_task(topic_coro)
         core_results = core_task.result()
         knowledge_results = knowledge_task.result()
+        topic_results = topic_task.result()
     else:
         core_results = []
-        knowledge_results = await knowledge_coro
+        async with asyncio.TaskGroup() as tg:
+            knowledge_task = tg.create_task(knowledge_coro)
+            topic_task = tg.create_task(topic_coro)
+        knowledge_results = knowledge_task.result()
+        topic_results = topic_task.result()
 
     # 合并结果
     new_builder = ctx.deps.context.copy(share_context=True, empty=True)
@@ -415,13 +425,32 @@ async def query_memory(
         )
         new_builder.add(knowledge_block)
 
-    if not core_memories and not knowledge_entries:
+    topic_archives = [r.item for r in topic_results]
+
+    if not core_memories and not knowledge_entries and not topic_archives:
         if real_user_id is None and user_id:
             return f"未找到与用户ID {user_id} 相关的记忆。"
         return "未找到与查询内容相关的记忆或知识。"
 
+    if topic_archives:
+        archive_msg_ids = [
+            mid for a in topic_archives for mid in a.representative_message_ids
+        ]
+        if archive_msg_ids:
+            archive_items = await memory_item_repo.get_many_by_message_ids(
+                archive_msg_ids
+            )
+            if archive_items:
+                archive_stream = MemoryItemStream.create(
+                    items=archive_items,
+                    prefix="<related_topic_archive>",
+                    suffix="</related_topic_archive>",
+                )
+                new_builder.add(archive_stream)
+
     logger.debug(
-        f"Found {len(core_memories)} core memories, {len(knowledge_entries)} knowledge entries"
+        f"Found {len(core_memories)} core memories, {len(knowledge_entries)} knowledge entries, "
+        f"{len(topic_archives)} topic archives"
     )
     return new_builder.to_prompt()
 

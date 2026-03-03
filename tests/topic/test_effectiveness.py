@@ -3,6 +3,8 @@
 验证聚类不是随机分配，而是能有效按语义分离话题。
 """
 
+import asyncio
+
 import pytest
 
 from nonebot_plugin_wtfllm.topic.manager import TopicManager
@@ -20,7 +22,8 @@ class TestTopicSeparationEffectiveness:
             decay_seconds=7200,
         )
 
-    def test_food_vs_tech_separation(self, manager: TopicManager):
+    @pytest.mark.asyncio
+    async def test_food_vs_tech_separation(self, manager: TopicManager):
         """美食话题和技术话题应被分到不同簇"""
         food_msgs = [
             "今天中午吃了一碗热腾腾的牛肉面",
@@ -41,18 +44,19 @@ class TestTopicSeparationEffectiveness:
         tech_labels = set()
 
         for i, msg in enumerate(food_msgs):
-            label = manager.ingest("a1", "g1", None, f"food_{i}", msg)
+            label = await manager.ingest("a1", "g1", None, f"food_{i}", msg)
             food_labels.add(label)
 
         for i, msg in enumerate(tech_msgs):
-            label = manager.ingest("a1", "g1", None, f"tech_{i}", msg)
+            label = await manager.ingest("a1", "g1", None, f"tech_{i}", msg)
             tech_labels.add(label)
 
         assert food_labels != tech_labels, (
             f"美食和技术话题被分到完全相同的簇: food={food_labels}, tech={tech_labels}"
         )
 
-    def test_interleaved_topics_separation(self, manager: TopicManager):
+    @pytest.mark.asyncio
+    async def test_interleaved_topics_separation(self, manager: TopicManager):
         """分批交替发送的不同话题消息应被正确分离"""
         messages = [
             ("今天做了一道红烧肉特别入味", "food"),
@@ -69,7 +73,7 @@ class TestTopicSeparationEffectiveness:
 
         topic_labels: dict[str, set[int]] = {"food": set(), "tech": set()}
         for i, (msg, category) in enumerate(messages):
-            label = manager.ingest("a1", "g1", None, f"msg_{i}", msg)
+            label = await manager.ingest("a1", "g1", None, f"msg_{i}", msg)
             topic_labels[category].add(label)
 
         overlap = topic_labels["food"] & topic_labels["tech"]
@@ -79,7 +83,8 @@ class TestTopicSeparationEffectiveness:
             f"交替话题完全重叠: food={topic_labels['food']}, tech={topic_labels['tech']}"
         )
 
-    def test_same_topic_consistency(self, manager: TopicManager):
+    @pytest.mark.asyncio
+    async def test_same_topic_consistency(self, manager: TopicManager):
         """同一话题的连续消息应有较高的一致性"""
         msgs = [
             "今天去超市买了很多新鲜蔬菜水果",
@@ -91,7 +96,7 @@ class TestTopicSeparationEffectiveness:
 
         labels = []
         for i, msg in enumerate(msgs):
-            label = manager.ingest("a1", "g1", None, f"msg_{i}", msg)
+            label = await manager.ingest("a1", "g1", None, f"msg_{i}", msg)
             labels.append(label)
 
         from collections import Counter
@@ -106,7 +111,8 @@ class TestTopicSeparationEffectiveness:
 class TestQueryTopicConcurrency:
     """验证 query_topic 在模拟高并发场景下能正确定位到对应簇"""
 
-    def test_query_after_batch_ingest(self):
+    @pytest.mark.asyncio
+    async def test_query_after_batch_ingest(self):
         """分批 ingest 不同话题后，query_topic 能正确匹配各自簇"""
         manager = TopicManager(
             maxsize=10, cluster_threshold=0.65, max_clusters=20,
@@ -119,7 +125,7 @@ class TestQueryTopicConcurrency:
             "早餐吃了豆浆油条配小笼包",
             "推荐一下那个麻辣烫确实不错",
         ]):
-            manager.ingest("a1", "g1", None, f"food_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"food_{i}", msg)
 
         for i, msg in enumerate([
             "Python的异步编程使用asyncio库",
@@ -128,21 +134,22 @@ class TestQueryTopicConcurrency:
             "Docker容器化部署微服务架构",
             "Git版本控制分支管理策略",
         ]):
-            manager.ingest("a1", "g1", None, f"tech_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"tech_{i}", msg)
 
         food_query = "今天想去吃火锅配麻辣烫"
-        manager.ingest("a1", "g1", None, "food_query", food_query)
-        food_label, food_ids = manager.query_topic("a1", "g1", None, food_query)
+        await manager.ingest("a1", "g1", None, "food_query", food_query)
+        food_label, food_ids = await manager.query_topic("a1", "g1", None, food_query)
 
         tech_query = "Python的asyncio异步编程框架"
-        manager.ingest("a1", "g1", None, "tech_query", tech_query)
-        tech_label, tech_ids = manager.query_topic("a1", "g1", None, tech_query)
+        await manager.ingest("a1", "g1", None, "tech_query", tech_query)
+        tech_label, tech_ids = await manager.query_topic("a1", "g1", None, tech_query)
 
         assert food_label != tech_label, (
             f"美食和技术查询被分到同一簇: food={food_label}, tech={tech_label}"
         )
 
-    def test_query_matches_earlier_topic_not_last(self):
+    @pytest.mark.asyncio
+    async def test_query_matches_earlier_topic_not_last(self):
         """最后 ingest 的是技术话题，但 query 美食时应返回美食簇"""
         manager = TopicManager(
             maxsize=10, cluster_threshold=0.65, max_clusters=20,
@@ -155,7 +162,7 @@ class TestQueryTopicConcurrency:
             "早餐吃了小笼包配豆浆",
             "宵夜吃了烧烤串串真香",
         ]):
-            manager.ingest("a1", "g1", None, f"food_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"food_{i}", msg)
 
         for i, msg in enumerate([
             "Python编程语言很强大",
@@ -164,30 +171,31 @@ class TestQueryTopicConcurrency:
             "Docker容器化部署好用",
             "Git版本控制必不可少",
         ]):
-            manager.ingest("a1", "g1", None, f"tech_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"tech_{i}", msg)
 
         food_query = "今天想吃红烧排骨配小笼包"
-        manager.ingest("a1", "g1", None, "food_query", food_query)
-        label, ids = manager.query_topic("a1", "g1", None, food_query)
+        await manager.ingest("a1", "g1", None, "food_query", food_query)
+        label, ids = await manager.query_topic("a1", "g1", None, food_query)
         food_ids_found = [mid for mid in ids if mid.startswith("food_")]
         assert len(food_ids_found) > 0, f"美食 query 未找到美食消息, ids={ids}"
 
-    def test_cross_session_query_isolation(self):
+    @pytest.mark.asyncio
+    async def test_cross_session_query_isolation(self):
         """不同 session 的 query 互不干扰"""
         manager = TopicManager(maxsize=10, cluster_threshold=0.8)
 
         for i, msg in enumerate([
             "今天吃了红烧肉好吃", "晚餐做了糖醋排骨", "午餐吃了麻辣火锅",
         ]):
-            manager.ingest("a1", "g1", None, f"g1_msg_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"g1_msg_{i}", msg)
 
         for i, msg in enumerate([
             "Python异步编程好用", "Docker容器化部署", "Linux服务器配置",
         ]):
-            manager.ingest("a1", "g2", None, f"g2_msg_{i}", msg)
+            await manager.ingest("a1", "g2", None, f"g2_msg_{i}", msg)
 
-        _, g1_ids = manager.query_topic("a1", "g1", None, "今天吃了什么")
-        _, g2_ids = manager.query_topic("a1", "g2", None, "Python编程")
+        _, g1_ids = await manager.query_topic("a1", "g1", None, "今天吃了什么")
+        _, g2_ids = await manager.query_topic("a1", "g2", None, "Python编程")
 
         g1_all_local = all(mid.startswith("g1_") for mid in g1_ids)
         g2_all_local = all(mid.startswith("g2_") for mid in g2_ids)
@@ -195,13 +203,11 @@ class TestQueryTopicConcurrency:
         assert g2_all_local, f"g2 查询返回了 g1 的消息: {g2_ids}"
 
 
-class TestQueryTopicThreadSafety:
-    """多线程并发 ingest + query_topic 竞态测试"""
+class TestAsyncConcurrency:
+    """异步并发 ingest + query_topic 竞态测试"""
 
-    def test_concurrent_ingest_does_not_corrupt_query(self):
-        import threading
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
+    @pytest.mark.asyncio
+    async def test_concurrent_ingest_does_not_corrupt_query(self):
         manager = TopicManager(
             maxsize=10, cluster_threshold=0.65, max_clusters=20,
         )
@@ -210,89 +216,69 @@ class TestQueryTopicThreadSafety:
             "今天吃了红烧肉非常好吃", "晚餐吃了清蒸鱼很新鲜",
             "午饭吃了麻辣火锅过瘾", "早餐吃了小笼包配豆浆", "宵夜吃了烧烤串串真香",
         ]):
-            manager.ingest("a1", "g1", None, f"food_init_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"food_init_{i}", msg)
 
         for i, msg in enumerate([
             "Python异步编程使用asyncio", "JavaScript框架React更新",
             "Linux服务器配置nginx代理", "Docker容器化部署微服务", "Git版本控制分支管理策略",
         ]):
-            manager.ingest("a1", "g1", None, f"tech_init_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"tech_init_{i}", msg)
 
         errors: list[str] = []
-        barrier = threading.Barrier(4)
 
-        def ingest_food():
-            barrier.wait()
+        async def ingest_food():
             for i in range(20):
-                manager.ingest("a1", "g1", None, f"food_concurrent_{i}",
-                               f"并发美食消息第{i}碗面条好吃")
+                await manager.ingest("a1", "g1", None, f"food_concurrent_{i}",
+                                     f"并发美食消息第{i}碗面条好吃")
 
-        def ingest_tech():
-            barrier.wait()
+        async def ingest_tech():
             for i in range(20):
-                manager.ingest("a1", "g1", None, f"tech_concurrent_{i}",
-                               f"并发技术消息第{i}个Python模块")
+                await manager.ingest("a1", "g1", None, f"tech_concurrent_{i}",
+                                     f"并发技术消息第{i}个Python模块")
 
-        def query_food():
-            barrier.wait()
+        async def query_food():
             for _ in range(20):
-                label, ids = manager.query_topic("a1", "g1", None, "今天吃了什么面条")
+                label, ids = await manager.query_topic("a1", "g1", None, "今天吃了什么面条")
                 if label < 0:
                     continue
                 for mid in ids:
                     if not mid.startswith(("food_", "tech_")):
                         errors.append(f"非法 message_id: {mid}")
 
-        def query_tech():
-            barrier.wait()
+        async def query_tech():
             for _ in range(20):
-                label, ids = manager.query_topic("a1", "g1", None, "Python编程开发框架")
+                label, ids = await manager.query_topic("a1", "g1", None, "Python编程开发框架")
                 if label < 0:
                     continue
                 for mid in ids:
                     if not mid.startswith(("food_", "tech_")):
                         errors.append(f"非法 message_id: {mid}")
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [
-                executor.submit(ingest_food), executor.submit(ingest_tech),
-                executor.submit(query_food), executor.submit(query_tech),
-            ]
-            for f in as_completed(futures):
-                exc = f.exception()
-                if exc:
-                    errors.append(f"线程异常: {exc}")
+        await asyncio.gather(
+            ingest_food(), ingest_tech(), query_food(), query_tech(),
+        )
 
         assert not errors, f"并发测试发现错误: {errors}"
 
-    def test_concurrent_ingest_across_sessions(self):
-        import threading
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
+    @pytest.mark.asyncio
+    async def test_concurrent_ingest_across_sessions(self):
         manager = TopicManager(maxsize=10, cluster_threshold=0.8)
         errors: list[str] = []
-        barrier = threading.Barrier(3)
 
-        def ingest_and_query_session(group_id: str, prefix: str, topic_text: str):
-            barrier.wait()
+        async def ingest_and_query_session(group_id: str, prefix: str, topic_text: str):
             for i in range(10):
-                manager.ingest("a1", group_id, None, f"{prefix}_{i}",
-                               f"{topic_text}第{i}条消息")
+                await manager.ingest("a1", group_id, None, f"{prefix}_{i}",
+                                     f"{topic_text}第{i}条消息")
             for _ in range(10):
-                label, ids = manager.query_topic("a1", group_id, None, topic_text)
+                label, ids = await manager.query_topic("a1", group_id, None, topic_text)
                 for mid in ids:
                     if not mid.startswith(prefix):
                         errors.append(f"session {group_id} 返回了其他 session 的消息: {mid}")
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [
-                executor.submit(ingest_and_query_session, "g1", "g1", "今天吃了红烧肉好吃"),
-                executor.submit(ingest_and_query_session, "g2", "g2", "Python编程语言好用"),
-                executor.submit(ingest_and_query_session, "g3", "g3", "今天天气真好适合散步"),
-            ]
-            for f in as_completed(futures):
-                exc = f.exception()
-                if exc:
-                    errors.append(f"线程异常: {exc}")
+        await asyncio.gather(
+            ingest_and_query_session("g1", "g1", "今天吃了红烧肉好吃"),
+            ingest_and_query_session("g2", "g2", "Python编程语言好用"),
+            ingest_and_query_session("g3", "g3", "今天天气真好适合散步"),
+        )
 
         assert not errors, f"跨 session 并发测试发现错误: {errors}"

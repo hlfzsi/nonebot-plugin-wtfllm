@@ -27,6 +27,7 @@ __all__ = [
     "RecentReactTask",
     "ToolCallHistoryTask",
     "TopicContextTask",
+    "TopicArchiveTask",
 ]
 
 from ._base import RetrievalTask
@@ -37,3 +38,4 @@ from .knowledge import KnowledgeSearchTask
 from .recent_react import RecentReactTask
 from .tool_history import ToolCallHistoryTask
 from .topic_context import TopicContextTask
+from .topic_archive import TopicArchiveTask

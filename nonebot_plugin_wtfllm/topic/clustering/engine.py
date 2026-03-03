@@ -1,20 +1,14 @@
+import copy
 import time
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ._types import TopicSessionState
+from .._types import ArchivalCandidate, SessionKey, TopicSessionState
 
 
 class TopicClustering:
-    """质心最近邻聚类（Leader Algorithm 变体 + DenStream 时间衰减）
-
-    每个实例服务一个会话。直接在余弦空间操作：
-    - threshold 即余弦相似度阈值
-    - 标签单调递增，永不重编号
-    - 质心增量更新，无需 rebuild
-    - 容量满时淘汰 decayed_weight 最低的簇（而非 force-assign）
-    """
+    """质心最近邻聚类"""
 
     _CENTROID_WEIGHT_CAP: int = 20
     _INERTIA_ALPHA: float = 0.15
@@ -35,28 +29,37 @@ class TopicClustering:
         self._next_label: int = 0
 
     def assign(
-        self, feature_vector: NDArray[np.floating], now: float | None = None
-    ) -> int:
-        """分配单条消息到簇，返回簇标签。"""
+        self,
+        feature_vector: NDArray[np.floating],
+        state: TopicSessionState,
+        session_key: SessionKey,
+        min_archive_messages: int = 10,
+        now: float | None = None,
+    ) -> tuple[int, ArchivalCandidate | None]:
+        """分配单条消息到簇，返回 (簇标签, 可能的淘汰归档候选)。"""
         if now is None:
             now = time.time()
         vec = feature_vector.flatten()
 
+        eviction_candidate: ArchivalCandidate | None = None
+
         if not self._centroids:
-            return self._create_cluster(vec, now)
+            return self._create_cluster(vec, now), None
 
         best_label, best_sim = self._find_nearest(vec)
 
         if best_sim >= self._effective_threshold(best_label):
             self._update_centroid(best_label, vec)
             self._last_active[best_label] = now
-            return best_label
+            return best_label, None
 
         # 需要新簇 — 容量满时淘汰衰减权重最低的簇
         if len(self._centroids) >= self._max_clusters:
-            self._evict_weakest(now)
+            eviction_candidate = self._evict_weakest(
+                now, state, session_key, min_archive_messages
+            )
 
-        return self._create_cluster(vec, now)
+        return self._create_cluster(vec, now), eviction_candidate
 
     def predict_only(self, feature_vector: NDArray[np.floating]) -> int:
         """仅预测簇标签，不更新模型"""
@@ -70,30 +73,36 @@ class TopicClustering:
     def n_clusters(self) -> int:
         return len(self._centroids)
 
-    def needs_pruning(self, state: TopicSessionState) -> bool:
-        """检查是否需要清理过期话题"""
-        now = time.time()
-        return any(
-            (now - c.last_active_at) > self.decay_seconds
-            for c in state.clusters.values()
-        )
-
-    def prune_stale_topics(self, state: TopicSessionState) -> list[int]:
+    def prune_stale_topics(
+        self,
+        state: TopicSessionState,
+        session_key: SessionKey,
+        min_archive_messages: int = 10,
+    ) -> tuple[list[int], list[ArchivalCandidate]]:
         """从会话状态中移除过期话题簇，同步清理内部质心。
 
-        返回被清理的簇标签列表。
+        返回 (被清理的簇标签列表, 符合归档条件的候选列表)。
         """
         now = time.time()
         pruned: list[int] = []
+        candidates: list[ArchivalCandidate] = []
         for label in list(state.clusters.keys()):
             cluster = state.clusters[label]
             if (now - cluster.last_active_at) > self.decay_seconds:
+                if cluster.message_count >= min_archive_messages:
+                    candidates.append(
+                        ArchivalCandidate(
+                            session_key=session_key,
+                            cluster=copy.deepcopy(cluster),
+                            centroid=self._centroids[label].copy(),
+                        )
+                    )
                 pruned.append(label)
                 del state.clusters[label]
                 self._centroids.pop(label, None)
                 self._counts.pop(label, None)
                 self._last_active.pop(label, None)
-        return pruned
+        return pruned, candidates
 
     def _effective_threshold(self, label: int) -> float:
         """大簇惯性：簇越大，准入阈值越高，防止黑洞吞噬。"""
@@ -107,14 +116,30 @@ class TopicClustering:
         weight = min(self._counts[label], self._CENTROID_WEIGHT_CAP)
         return weight * (2.0 ** (-dt / self._decay_half_life))
 
-    def _evict_weakest(self, now: float) -> None:
+    def _evict_weakest(
+        self,
+        now: float,
+        state: TopicSessionState,
+        session_key: SessionKey,
+        min_archive_messages: int,
+    ) -> ArchivalCandidate | None:
         """淘汰衰减权重最低的簇，为新话题腾出空间。"""
         weakest = min(
             self._centroids, key=lambda label: self._decayed_weight(label, now)
         )
+        candidate: ArchivalCandidate | None = None
+        cluster = state.clusters.get(weakest)
+        if cluster and cluster.message_count >= min_archive_messages:
+            candidate = ArchivalCandidate(
+                session_key=session_key,
+                cluster=copy.deepcopy(cluster),
+                centroid=self._centroids[weakest].copy(),
+            )
         del self._centroids[weakest]
         del self._counts[weakest]
         del self._last_active[weakest]
+        state.clusters.pop(weakest, None)
+        return candidate
 
     def _find_nearest(self, vec: NDArray[np.floating]) -> tuple[int, float]:
         """找到与 vec 余弦相似度最高的质心"""
@@ -127,9 +152,7 @@ class TopicClustering:
                 best_label = label
         return best_label, best_sim
 
-    def _create_cluster(
-        self, vec: NDArray[np.floating], now: float
-    ) -> int:
+    def _create_cluster(self, vec: NDArray[np.floating], now: float) -> int:
         label = self._next_label
         self._next_label += 1
         self._centroids[label] = vec.copy()

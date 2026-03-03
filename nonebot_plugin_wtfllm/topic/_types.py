@@ -4,6 +4,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+import numpy as np
+from numpy.typing import NDArray
+
 
 @dataclass(slots=True)
 class SessionKey:
@@ -50,3 +53,12 @@ class TopicSessionState:
     session_key: SessionKey
     clusters: dict[int, TopicCluster] = field(default_factory=dict)
     total_messages_ingested: int = 0
+
+
+@dataclass(slots=True)
+class ArchivalCandidate:
+    """即将被移除的簇的归档快照"""
+
+    session_key: SessionKey
+    cluster: TopicCluster
+    centroid: NDArray[np.floating]

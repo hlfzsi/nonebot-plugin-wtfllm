@@ -10,9 +10,11 @@ import tracemalloc
 from collections import defaultdict
 
 import numpy as np
+import pytest
 
+from nonebot_plugin_wtfllm.topic._types import SessionKey, TopicSessionState
 from nonebot_plugin_wtfllm.topic.manager import TopicManager
-from nonebot_plugin_wtfllm.topic.vectorizer import TopicVectorizer
+from nonebot_plugin_wtfllm.topic.clustering import TopicVectorizer
 from nonebot_plugin_wtfllm.topic.clustering import TopicClustering
 
 
@@ -47,6 +49,9 @@ def format_bytes(n: int) -> str:
         return f"{n / 1024:.1f} KB"
     else:
         return f"{n / 1024 ** 2:.2f} MB"
+
+
+_DEFAULT_KEY = SessionKey(agent_id="a1", group_id="g1")
 
 
 class TestBenchVectorizer:
@@ -88,6 +93,7 @@ class TestBenchCentroidGrowth:
     def test_centroid_growth(self):
         vec = TopicVectorizer()
         clustering = TopicClustering(threshold=0.5, max_clusters=30)
+        state = TopicSessionState(session_key=_DEFAULT_KEY)
 
         msgs = [
             f"话题{topic}的第{i}条消息内容讨论{['美食烹饪', '编程技术', '旅游出行', '体育运动', '音乐影视'][topic % 5]}"
@@ -99,7 +105,7 @@ class TestBenchCentroidGrowth:
         checkpoints = [10, 50, 100, 200, 500, 1000]
         for idx, msg in enumerate(msgs, 1):
             fv = vec.transform(msg)
-            clustering.assign(fv)
+            clustering.assign(fv, state=state, session_key=_DEFAULT_KEY)
             if idx in checkpoints:
                 n_centroids = clustering.n_clusters
                 centroid_mem = sum(c.nbytes for c in clustering._centroids.values())
@@ -108,7 +114,8 @@ class TestBenchCentroidGrowth:
 
 
 class TestBenchPerSession:
-    def test_single_session_memory(self):
+    @pytest.mark.asyncio
+    async def test_single_session_memory(self):
         tracemalloc.start()
         gc.collect()
         snap1 = tracemalloc.take_snapshot()
@@ -127,7 +134,7 @@ class TestBenchPerSession:
         ]
         for i in range(1000):
             topic = i % 5
-            manager.ingest("a1", "g1", None, f"msg_{i}", topics_text[topic])
+            await manager.ingest("a1", "g1", None, f"msg_{i}", topics_text[topic])
 
         gc.collect()
         snap2 = tracemalloc.take_snapshot()
@@ -149,7 +156,8 @@ class TestBenchPerSession:
 
 
 class TestBenchMultiSession:
-    def test_100_sessions(self):
+    @pytest.mark.asyncio
+    async def test_100_sessions(self):
         tracemalloc.start()
         gc.collect()
         snap1 = tracemalloc.take_snapshot()
@@ -161,7 +169,7 @@ class TestBenchMultiSession:
 
         for g in range(100):
             for i in range(50):
-                manager.ingest(
+                await manager.ingest(
                     "a1", f"g{g}", None, f"g{g}_msg_{i}",
                     f"群{g}的第{i}条消息讨论美食编程旅游",
                 )
@@ -178,7 +186,8 @@ class TestBenchMultiSession:
 
 
 class TestBenchIngestLatency:
-    def test_latency_by_phase(self):
+    @pytest.mark.asyncio
+    async def test_latency_by_phase(self):
         manager = TopicManager(
             maxsize=10, cluster_threshold=0.5,
             max_clusters=30,
@@ -189,7 +198,7 @@ class TestBenchIngestLatency:
         for i in range(1, 501):
             text = f"消息内容{i}讨论{['美食', '技术', '旅游'][i % 3]}话题"
             t0 = time.perf_counter()
-            manager.ingest("a1", "g1", None, f"msg_{i}", text)
+            await manager.ingest("a1", "g1", None, f"msg_{i}", text)
             elapsed = (time.perf_counter() - t0) * 1000
 
             if i <= 10:
@@ -213,7 +222,8 @@ class TestBenchIngestLatency:
 
 
 class TestBenchDiverseMessages:
-    def test_memory_growth_with_diverse_text(self):
+    @pytest.mark.asyncio
+    async def test_memory_growth_with_diverse_text(self):
         """用随机多样文本测试内存增长"""
         import random
         random.seed(42)
@@ -228,7 +238,7 @@ class TestBenchDiverseMessages:
         for i in range(1, 2001):
             length = random.randint(10, 60)
             text = ''.join(random.choices(chars, k=length))
-            manager.ingest("a1", "g1", None, f"msg_{i}", text)
+            await manager.ingest("a1", "g1", None, f"msg_{i}", text)
 
             if i in [50, 100, 500, 1000, 2000]:
                 ctx = manager._sessions["a1:g:g1"]
@@ -242,7 +252,8 @@ class TestBenchDiverseMessages:
 
 
 class TestBenchMaintenanceGap:
-    def test_prune(self):
+    @pytest.mark.asyncio
+    async def test_prune(self):
         manager = TopicManager(
             maxsize=10, cluster_threshold=0.5,
             max_clusters=30, decay_seconds=7200,
@@ -250,22 +261,22 @@ class TestBenchMaintenanceGap:
         )
 
         for i in range(500):
-            manager.ingest("a1", "g1", None, f"msg_{i}",
+            await manager.ingest("a1", "g1", None, f"msg_{i}",
                            f"消息{i}关于{['食物', '代码', '电影', '音乐', '运动'][i % 5]}")
 
         ctx = manager._sessions["a1:g:g1"]
         state = ctx.state
+        key = state.session_key
         print(f"\n  500 条消息后:")
         print(f"    簇数: {len(state.clusters)}")
         print(f"    质心数: {ctx.clustering.n_clusters}")
-        print(f"    needs_pruning: {ctx.clustering.needs_pruning(state)}")
 
         import time as _time
         old = _time.time() - 8000
         for c in state.clusters.values():
             c.last_active_at = old
-        print(f"    强制过期后 needs_pruning: {ctx.clustering.needs_pruning(state)}")
 
-        pruned = ctx.clustering.prune_stale_topics(state)
+        pruned, candidates = ctx.clustering.prune_stale_topics(state, session_key=key)
         print(f"    prune 了 {len(pruned)} 个簇, 剩余: {len(state.clusters)}")
+        print(f"    归档候选数: {len(candidates)}")
         print(f"    质心数也同步减少为: {ctx.clustering.n_clusters}")

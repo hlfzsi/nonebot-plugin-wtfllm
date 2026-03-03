@@ -179,10 +179,6 @@ class Config(BaseModel):
         description="回归曲线上界分位数，越大越保守",
     )
 
-    topic_enabled: bool = Field(
-        default=True,
-        description="是否启用话题聚类短期记忆增强",
-    )
     topic_cluster_threshold: float = Field(
         default=0.70,
         description="话题聚类余弦相似度阈值，越大话题划分越细",
@@ -198,6 +194,18 @@ class Config(BaseModel):
     topic_max_context_messages: int = Field(
         default=10,
         description="话题上下文检索的最大消息数",
+    )
+    topic_archive_min_messages: int = Field(
+        default=10,
+        description="簇最少消息数才归档到长期记忆",
+    )
+    topic_archive_mmr_k: int = Field(
+        default=5,
+        description="MMR选取代表消息条数",
+    )
+    topic_archive_mmr_lambda: float = Field(
+        default=0.5,
+        description="MMR relevance-diversity权衡系数",
     )
 
     def model_post_init(self, __context):

@@ -1,12 +1,12 @@
-import threading
+import asyncio
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Coroutine
 
 from cachetools import LRUCache
 
-from ._types import SessionKey, TopicCluster, TopicSessionState
-from .clustering import TopicClustering
-from .vectorizer import TopicVectorizer
+from ._types import ArchivalCandidate, SessionKey, TopicCluster, TopicSessionState
+from .clustering.engine import TopicClustering
+from .clustering.vectorizer import vectorizer
 from ..utils import logger
 
 
@@ -22,7 +22,7 @@ class _SessionContext:
     ) -> None:
         self.state = state
         self.clustering = clustering
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
 
 
 class TopicManager:
@@ -34,15 +34,59 @@ class TopicManager:
         decay_seconds: float = 7200,
         maintenance_interval: int = 100,
         max_messages_per_cluster: int = 200,
+        min_archive_messages: int = 10,
     ) -> None:
         self._sessions: LRUCache[str, _SessionContext] = LRUCache(maxsize=maxsize)
-        self._lock = threading.Lock()  # 保护 _sessions 字典访问
-        self._vectorizer = TopicVectorizer()
+        self._lock = asyncio.Lock()
+        self._vectorizer = vectorizer
         self._cluster_threshold = cluster_threshold
         self._max_clusters = max_clusters
         self._decay_seconds = decay_seconds
         self._maintenance_interval = maintenance_interval
         self._max_messages_per_cluster = max_messages_per_cluster
+        self._min_archive_messages = min_archive_messages
+
+        self._archive_queue: asyncio.Queue[ArchivalCandidate] = asyncio.Queue()
+        self._archive_worker: asyncio.Task[None] | None = None
+        self._archive_handlers: (
+            list[Callable[[ArchivalCandidate], Coroutine[Any, Any, None]]] | None
+        ) = None
+
+    def start(
+        self,
+        handler: Callable[[ArchivalCandidate], Coroutine[Any, Any, None]] | None = None,
+    ) -> None:
+        """启动后台归档 worker。"""
+        if self._archive_handlers is None:
+            self._archive_handlers = []
+        if handler is not None:
+            self._archive_handlers.append(handler)
+        if self._archive_worker is None:
+            self._archive_worker = asyncio.create_task(self._archive_consumer())
+
+    async def stop(self) -> None:
+        """停止归档 worker。"""
+        if self._archive_worker:
+            self._archive_worker.cancel()
+            try:
+                await self._archive_worker
+            except asyncio.CancelledError:
+                pass
+            self._archive_worker = None
+
+    async def _archive_consumer(self) -> None:
+        """后台消费者：从队列取候选并执行归档。"""
+        while True:
+            candidate = await self._archive_queue.get()
+            try:
+                if self._archive_handlers is not None:
+                    await asyncio.gather(
+                        *[handler(candidate) for handler in self._archive_handlers]
+                    )
+            except Exception:
+                logger.opt(exception=True).warning("cluster archival failed")
+            finally:
+                self._archive_queue.task_done()
 
     def _get_or_create(self, key: SessionKey) -> _SessionContext:
         cache_key = key.cache_key
@@ -58,11 +102,11 @@ class TopicManager:
             self._sessions[cache_key] = ctx
         return self._sessions[cache_key]
 
-    def ingest(
+    async def ingest(
         self,
         agent_id: str,
-        group_id: Optional[str],
-        user_id: Optional[str],
+        group_id: str | None,
+        user_id: str | None,
         message_id: str,
         plain_text: str,
     ) -> int:
@@ -71,16 +115,24 @@ class TopicManager:
             return -1
 
         key = SessionKey(agent_id=agent_id, group_id=group_id, user_id=user_id)
-        with self._lock:
+        async with self._lock:
             ctx = self._get_or_create(key)
 
-        with ctx.lock:
+        async with ctx.lock:
             state = ctx.state
             now = time.time()
 
-            feature_vector = self._vectorizer.transform(plain_text)
+            feature_vector = await asyncio.to_thread(
+                self._vectorizer.transform, plain_text
+            )
 
-            label = ctx.clustering.assign(feature_vector, now=now)
+            label, eviction_candidate = ctx.clustering.assign(
+                feature_vector,
+                state=state,
+                session_key=key,
+                min_archive_messages=self._min_archive_messages,
+                now=now,
+            )
 
             if label not in state.clusters:
                 state.clusters[label] = TopicCluster(label=label)
@@ -97,33 +149,44 @@ class TopicManager:
 
             state.total_messages_ingested += 1
 
+            # 入队淘汰候选
+            if eviction_candidate is not None:
+                self._archive_queue.put_nowait(eviction_candidate)
+
+            # 周期性超时清理
             if state.total_messages_ingested % self._maintenance_interval == 0:
-                self._maintenance(ctx)
+                _pruned, prune_candidates = ctx.clustering.prune_stale_topics(
+                    state,
+                    session_key=key,
+                    min_archive_messages=self._min_archive_messages,
+                )
+                for candidate in prune_candidates:
+                    self._archive_queue.put_nowait(candidate)
 
             return label
 
-    def query_topic(
+    async def query_topic(
         self,
         agent_id: str,
-        group_id: Optional[str],
-        user_id: Optional[str],
+        group_id: str | None,
+        user_id: str | None,
         query: str,
         max_count: int = 20,
-        before_timestamp: Optional[float] = None,
-    ) -> Tuple[int, List[str]]:
+        before_timestamp: float | None = None,
+    ) -> tuple[int, list[str]]:
         """对 query 文本分类到已有簇，返回 (label, message_ids)。
 
         纯只读操作，不修改模型状态。
         """
         key = SessionKey(agent_id=agent_id, group_id=group_id, user_id=user_id)
         cache_key = key.cache_key
-        with self._lock:
+        async with self._lock:
             if cache_key not in self._sessions:
                 return (-1, [])
             ctx = self._sessions[cache_key]
 
-        with ctx.lock:
-            feature_vector = self._vectorizer.transform(query)
+        async with ctx.lock:
+            feature_vector = await asyncio.to_thread(self._vectorizer.transform, query)
             label = ctx.clustering.predict_only(feature_vector)
             if label < 0:
                 return (-1, [])
@@ -140,24 +203,24 @@ class TopicManager:
 
             return (label, message_ids)
 
-    def get_active_topics_summary(
+    async def get_active_topics_summary(
         self,
         agent_id: str,
-        group_id: Optional[str],
-        user_id: Optional[str],
-    ) -> List[Dict[str, Any]]:
+        group_id: str | None,
+        user_id: str | None,
+    ) -> list[dict[str, Any]]:
         """获取会话所有活跃话题摘要（调试/监控用）"""
         logger.warning("get_active_topics_summary 只应在调试时使用")
         key = SessionKey(agent_id=agent_id, group_id=group_id, user_id=user_id)
         cache_key = key.cache_key
-        with self._lock:
+        async with self._lock:
             if cache_key not in self._sessions:
                 return []
             ctx = self._sessions[cache_key]
 
-        with ctx.lock:
+        async with ctx.lock:
             state = ctx.state
-            summaries: List[Dict[str, Any]] = []
+            summaries: list[dict[str, Any]] = []
             for label, cluster in state.clusters.items():
                 summaries.append(
                     {
@@ -167,8 +230,3 @@ class TopicManager:
                     }
                 )
             return summaries
-
-    def _maintenance(self, ctx: _SessionContext) -> None:
-        """周期性维护：清理过期话题"""
-        if ctx.clustering.needs_pruning(ctx.state):
-            ctx.clustering.prune_stale_topics(ctx.state)

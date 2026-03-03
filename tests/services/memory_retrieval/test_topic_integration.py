@@ -55,7 +55,7 @@ class TestTopicIntegration:
             ("这个天气适合去公园", "u1"),
         ]
         for i, (text, sender) in enumerate(msgs):
-            manager.ingest("a1", "g1", None, f"msg_{i}", text)
+            await manager.ingest("a1", "g1", None, f"msg_{i}", text)
 
         # 手动设置 message_entries 的时间戳为过去，模拟已滑出窗口
         old_ts = int(time.time()) - 200
@@ -67,10 +67,10 @@ class TestTopicIntegration:
             ]
 
         query_text = "今天天气怎么样"
-        label, msg_ids = manager.query_topic(
+        label, msg_ids = await manager.query_topic(
             "a1", "g1", None, query_text, max_count=10, before_timestamp=time.time() - 50,
         )
-        mock_tm.query_topic.return_value = (label, msg_ids)
+        mock_tm.query_topic = AsyncMock(return_value=(label, msg_ids))
         mock_repo.get_many_by_message_ids = AsyncMock(
             return_value=_make_items(msg_ids, old_ts)
         )
@@ -79,7 +79,6 @@ class TestTopicIntegration:
             agent_id="a1",
             group_id="g1",
             query=query_text,
-            window_seconds=50,
         )
         result = await task.execute()
 
@@ -95,7 +94,7 @@ class TestTopicIntegration:
     @patch(f"{MODULE}.topic_manager")
     async def test_empty_when_no_topic_data(self, mock_tm, mock_repo):
         """没有话题数据时应返回空集合"""
-        mock_tm.query_topic.return_value = (-1, [])
+        mock_tm.query_topic = AsyncMock(return_value=(-1, []))
 
         task = TopicContextTask(agent_id="a1", group_id="g1", query="任意查询")
         result = await task.execute()
@@ -107,7 +106,7 @@ class TestTopicIntegration:
     @patch(f"{MODULE}.topic_manager")
     async def test_empty_when_db_returns_nothing(self, mock_tm, mock_repo):
         """DB 查不到消息时应返回空集合"""
-        mock_tm.query_topic.return_value = (0, ["msg_0", "msg_1"])
+        mock_tm.query_topic = AsyncMock(return_value=(0, ["msg_0", "msg_1"]))
         mock_repo.get_many_by_message_ids = AsyncMock(return_value=[])
 
         task = TopicContextTask(agent_id="a1", group_id="g1", query="天气怎么样")
@@ -124,12 +123,13 @@ class TestTopicIntegration:
         assert result == set()
         mock_tm.query_topic.assert_not_called()
 
-    def test_manager_query_topic_returns_correct_messages(self, manager: TopicManager):
+    @pytest.mark.asyncio
+    async def test_manager_query_topic_returns_correct_messages(self, manager: TopicManager):
         """摄入消息后，query_topic 应返回正确的消息 ID"""
         msgs = ["今天吃了红烧肉很好吃", "晚饭做了糖醋排骨", "午餐去吃了麻辣火锅"]
         for i, msg in enumerate(msgs):
-            manager.ingest("a1", "g1", None, f"food_{i}", msg)
+            await manager.ingest("a1", "g1", None, f"food_{i}", msg)
 
-        _, ids = manager.query_topic("a1", "g1", None, "今天吃了什么")
+        _, ids = await manager.query_topic("a1", "g1", None, "今天吃了什么")
         assert len(ids) > 0
         assert all(mid.startswith("food_") for mid in ids)

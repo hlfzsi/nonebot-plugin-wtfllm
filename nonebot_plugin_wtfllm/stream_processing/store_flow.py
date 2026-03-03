@@ -6,7 +6,7 @@ from nonebot_plugin_alconna import MsgId, UniMessage
 
 from ..msg_tracker import msg_tracker
 from ..topic import topic_manager
-from ..utils import APP_CONFIG, extract_session_info
+from ..utils import extract_session_info
 from .extract import convert_and_store_item
 
 if TYPE_CHECKING:
@@ -65,10 +65,10 @@ async def store_message_with_context(
             msg_id=str(msg_id),
         )
 
-    if ingest_topic and APP_CONFIG.topic_enabled:
+    if ingest_topic:
         plain_text = item.get_plain_text()
         if plain_text:
-            topic_manager.ingest(
+            await topic_manager.ingest(
                 agent_id=agent_id,
                 group_id=resolved_group_id,
                 user_id=resolved_user_id,

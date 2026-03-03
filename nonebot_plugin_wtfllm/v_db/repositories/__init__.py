@@ -9,9 +9,11 @@ __all__ = [
     "MemeRepository",
     "CoreMemoryRepository",
     "KnowledgeBaseRepository",
+    "TopicArchiveRepository",
 ]
 
 from .base import VectorRepository, SearchResult
 from .meme import MemeRepository
 from .core_memory import CoreMemoryRepository
 from .knowledge_base import KnowledgeBaseRepository
+from .topic_archive import TopicArchiveRepository

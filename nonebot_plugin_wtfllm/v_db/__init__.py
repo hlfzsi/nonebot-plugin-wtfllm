@@ -31,6 +31,7 @@ __all__ = [
     "MemePayload",
     "CoreMemoryPayload",
     "KnowledgeBasePayload",
+    "TopicArchivePayload",
     # Repository 基类
     "VectorRepository",
     "SearchResult",
@@ -38,18 +39,34 @@ __all__ = [
     "MemeRepository",
     "CoreMemoryRepository",
     "KnowledgeBaseRepository",
+    "TopicArchiveRepository",
     # Repository 单例
     "meme_repo",
     "core_memory_repo",
     "knowledge_base_repo",
+    "topic_archive_repo",
 ]
 
 from .engine import get_qdrant_client
 from .lifecycle import on_startup, on_shutdown
-from .models import VectorModel, MemePayload, CoreMemoryPayload, KnowledgeBasePayload
-from .repositories import VectorRepository, SearchResult, MemeRepository, CoreMemoryRepository, KnowledgeBaseRepository
+from .models import (
+    VectorModel,
+    MemePayload,
+    CoreMemoryPayload,
+    KnowledgeBasePayload,
+    TopicArchivePayload,
+)
+from .repositories import (
+    VectorRepository,
+    SearchResult,
+    MemeRepository,
+    CoreMemoryRepository,
+    KnowledgeBaseRepository,
+    TopicArchiveRepository,
+)
 
 # 全局 Repository 单例
 meme_repo = MemeRepository()
 core_memory_repo = CoreMemoryRepository()
 knowledge_base_repo = KnowledgeBaseRepository()
+topic_archive_repo = TopicArchiveRepository()

@@ -9,6 +9,7 @@ __all__ = [
     "MemePayload",
     "CoreMemoryPayload",
     "KnowledgeBasePayload",
+    "TopicArchivePayload",
 ]
 
 
@@ -17,6 +18,7 @@ from .base import VectorModel
 from .meme import MemePayload
 from .core_memory import CoreMemoryPayload
 from .knowledge_base import KnowledgeBasePayload
+from .topic_archive import TopicArchivePayload
 
 
-MODELS: list[Type[VectorModel]] = [MemePayload, CoreMemoryPayload, KnowledgeBasePayload]
+MODELS: list[Type[VectorModel]] = [MemePayload, CoreMemoryPayload, KnowledgeBasePayload, TopicArchivePayload]

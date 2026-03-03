@@ -12,6 +12,7 @@ from .knowledge import KnowledgeSearchTask
 from .recent_react import RecentReactTask
 from .tool_history import ToolCallHistoryTask
 from .topic_context import TopicContextTask
+from .topic_archive import TopicArchiveTask
 
 
 if TYPE_CHECKING:
@@ -261,8 +262,8 @@ class RetrievalChain:
         agent_id: str = _UNSET,
         group_id: str | None = _UNSET,
         user_id: str | None = _UNSET,
+        query: str = _UNSET,
         max_topic_messages: int = 10,
-        window_seconds: float = 7200,
     ) -> Self:
         """添加话题上下文检索任务"""
         return self._add(
@@ -270,8 +271,27 @@ class RetrievalChain:
                 agent_id=self._d(agent_id, self.agent_id),
                 group_id=self._d(group_id, self.group_id),
                 user_id=self._d(user_id, self.user_id),
-                query=self.query or "",
+                query=self._d(query, self.query),
                 max_topic_messages=max_topic_messages,
-                window_seconds=window_seconds,
+            )
+        )
+
+    def topic_archive(
+        self,
+        *,
+        agent_id: str = _UNSET,
+        group_id: str | None = _UNSET,
+        user_id: str | None = _UNSET,
+        query: str = _UNSET,
+        limit: int = 3,
+    ) -> Self:
+        """添加话题归档长期记忆检索任务"""
+        return self._add(
+            TopicArchiveTask(
+                agent_id=self._d(agent_id, self.agent_id),
+                group_id=self._d(group_id, self.group_id),
+                user_id=self._d(user_id, self.user_id),
+                query=self._d(query, self.query),
+                limit=limit,
             )
         )

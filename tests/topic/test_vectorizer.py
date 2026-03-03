@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from nonebot_plugin_wtfllm.topic.vectorizer import TopicVectorizer
+from nonebot_plugin_wtfllm.topic.clustering import TopicVectorizer
 
 
 class TestTopicVectorizer:

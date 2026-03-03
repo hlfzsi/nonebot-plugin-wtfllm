@@ -5,6 +5,7 @@ from ._base import RetrievalTask
 from ....memory.items import MemorySource, MemoryItemStream
 from ....db import memory_item_repo
 from ....topic import topic_manager
+from ....utils import APP_CONFIG
 
 
 @dataclass
@@ -16,15 +17,14 @@ class TopicContextTask(RetrievalTask):
     user_id: str | None = None
     query: str = ""
     max_topic_messages: int = 10
-    window_seconds: float = 7200
 
     async def execute(self) -> set[MemorySource]:
         if not self.query:
             return set()
 
-        cutoff = time.time() - self.window_seconds
+        cutoff = time.time() - APP_CONFIG.topic_decay_minutes * 60
 
-        label, topic_msg_ids = topic_manager.query_topic(
+        label, topic_msg_ids = await topic_manager.query_topic(
             agent_id=self.agent_id,
             group_id=self.group_id,
             user_id=self.user_id,

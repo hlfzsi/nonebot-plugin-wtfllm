@@ -759,6 +759,10 @@ class TestGetFullMessageDetail:
 # ===================== query_memory 测试 =====================
 
 
+@patch(
+    "nonebot_plugin_wtfllm.llm.tools.tool_group.core.topic_archive_repo",
+    **{"search_by_session": AsyncMock(return_value=[])},
+)
 class TestQueryMemory:
     """query_memory 工具测试"""
 
@@ -768,7 +772,7 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
     async def test_with_user_id_resolved(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
     ):
         """user_id 提供且 resolve 成功 -> search_by_entities"""
         ctx = _make_context()
@@ -798,7 +802,7 @@ class TestQueryMemory:
     @pytest.mark.asyncio
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_user_id_not_resolved(self, mock_core_repo, mock_kb_repo):
+    async def test_user_id_not_resolved(self, mock_core_repo, mock_kb_repo, _mock_ta_repo):
         """user_id 提供但 resolve 返回 None -> core_coro=None, 仅搜索知识库"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
@@ -817,7 +821,7 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
     async def test_no_user_id_cross_session(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
     ):
         """user_id=None -> search_cross_session"""
         ctx = _make_context()
@@ -847,7 +851,7 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
     async def test_no_user_id_private_chat_cross_session(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
     ):
         """私聊且 user_id=None -> exclude_user_id 应传实际值"""
         ctx = _make_context()
@@ -874,7 +878,7 @@ class TestQueryMemory:
     @pytest.mark.asyncio
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_results_returns_message(self, mock_core_repo, mock_kb_repo):
+    async def test_no_results_returns_message(self, mock_core_repo, mock_kb_repo, _mock_ta_repo):
         """无结果时返回提示文本"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
@@ -893,7 +897,7 @@ class TestQueryMemory:
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
     @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
     async def test_only_knowledge_results(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb
+        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
     ):
         """仅有知识库结果时也应正确返回"""
         ctx = _make_context()

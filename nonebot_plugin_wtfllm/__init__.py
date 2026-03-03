@@ -14,6 +14,8 @@ from .db import init_db as rdb_init_db, shutdown_db as rdb_shutdown_db  # noqa: 
 from .v_db import on_startup as vdb_on_startup, on_shutdown as vdb_on_shutdown  # noqa: E402
 from .scheduler import init_scheduler, shutdown_scheduler  # noqa: E402
 from .utils import init_http_client, shutdown_http_client  # noqa: E402
+from .topic import topic_manager  # noqa: E402
+from .topic.archive.pipeline import archive_cluster  # noqa: E402
 
 try:
     __version__ = version(__package__) if __package__ else None
@@ -50,11 +52,14 @@ async def on_startup():
         tg.create_task(init_scheduler())
 
     setup_lifecycle_tasks()
+    topic_manager.start(archive_cluster)
 
 
 @driver.on_shutdown
 async def on_shutdown():
     shutdown_lifecycle_tasks()
+
+    await topic_manager.stop()
 
     async with asyncio.TaskGroup() as tg:
         tg.create_task(shutdown_scheduler())

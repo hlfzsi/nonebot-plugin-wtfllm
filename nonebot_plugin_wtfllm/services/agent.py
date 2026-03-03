@@ -38,7 +38,7 @@ async def handle(
     session_info = extract_session_info(session)
     usable_user_id = session_info["user_id"]
     usable_group_id = session_info["group_id"]
-    
+
     if await is_banned(usable_user_id, usable_group_id):
         agent_id = get_agent_id_from_bot(session)
         attention_router.remove_poi(
@@ -127,13 +127,9 @@ async def handle(
         ).recent_react(
             recent_react=recent_react,
             alias_provider=builder.ctx.alias_provider,
+        ).topic_context(
+            max_topic_messages=APP_CONFIG.topic_max_context_messages,
         )
-
-        if APP_CONFIG.topic_enabled:
-            chain.topic_context(
-                max_topic_messages=APP_CONFIG.topic_max_context_messages,
-                window_seconds=APP_CONFIG.message_track_time_minutes * 60,
-            )
 
         final_sources = await chain.resolve()
         builder.extend(final_sources)

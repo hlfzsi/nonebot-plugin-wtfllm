@@ -22,8 +22,6 @@ _COLLECT = (
     "/ban",
     "/eb",
     "/easyban",
-    "/summary",
-    "/摘要",
     "/delete_media",
     "/del",
     "/delete",

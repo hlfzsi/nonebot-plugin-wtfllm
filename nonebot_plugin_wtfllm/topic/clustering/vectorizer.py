@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from sklearn.preprocessing import normalize
 from model2vec import StaticModel
 
-from ..utils import RESOURCES_DIR
+from ...utils import RESOURCES_DIR
 
 # 输出向量为512维
 STATICMODEL_PATH = (RESOURCES_DIR / "acge-m2v-distilled").resolve()
@@ -23,3 +23,5 @@ class TopicVectorizer:
         """批量向量化，返回 M×D 特征矩阵"""
         raw = self._model.encode(texts)
         return normalize(raw, norm="l2")
+
+vectorizer = TopicVectorizer()
