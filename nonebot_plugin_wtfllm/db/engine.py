@@ -1,11 +1,11 @@
 __all__ = ["ENGINE", "WRITE_LOCK", "SESSION_MAKER"]
 
 import asyncio
-import sqlite3
 from typing import Any
 
 from orjson import dumps, loads
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import event
 
@@ -44,8 +44,10 @@ ENGINE = create_async_engine(
 
 
 @event.listens_for(ENGINE.sync_engine, "connect")
-def set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
-    if isinstance(dbapi_connection, sqlite3.Connection):
+def set_sqlite_pragma(
+    dbapi_connection: DBAPIConnection, connection_record: Any
+) -> None:
+    if ENGINE.dialect.name == "sqlite":
         WRITE_LOCK._enabled = True
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
