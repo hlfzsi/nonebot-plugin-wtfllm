@@ -12,10 +12,8 @@ from ...deps import Context
 from ....utils import APP_CONFIG, logger
 from ....memory import ImageSegment
 from ....memory.items.storages import MemoryItemStream
-from ....memory.items.core_memory import CoreMemoryBlock
-from ....memory.items.knowledge_base import KnowledgeBlock
 from ....db import memory_item_repo, tool_call_record_repo
-from ....v_db import core_memory_repo, knowledge_base_repo, topic_archive_repo
+from ....services.func.memory_retrieval import RetrievalChain
 from ....abilities import (
     attention_router,
     PoiInfo,
@@ -344,13 +342,11 @@ async def get_full_message_detail(ctx: Context, message_ref: int) -> str:
 async def query_memory(
     ctx: Context, query: str, user_id: str | None = None, limit: int = 5
 ):
-    """通过语义搜索查询相关的核心记忆和知识库
-
-    同时搜索核心记忆（会话相关）和知识库（全局共享），返回合并结果。
+    """通过语义搜索查询相关的记忆
 
     Args:
         query: 查询内容
-        user_id: 可选的用户ID，用于过滤核心记忆
+        user_id: 可选的用户ID，用于过滤记忆归属
         limit: 返回的记忆数量限制
     """
     logger.debug(
@@ -358,100 +354,53 @@ async def query_memory(
     )
     real_user_id = ctx.deps.context.resolve_aliases(user_id) if user_id else None
 
-    # 构建核心记忆搜索协程
+    chain = RetrievalChain(
+        agent_id=ctx.deps.ids.agent_id,
+        group_id=ctx.deps.ids.group_id,
+        user_id=ctx.deps.ids.user_id,
+        query=query,
+    )
+
+    # 核心记忆分支
     if real_user_id and user_id:
-        core_coro = core_memory_repo.search_by_entities(
-            agent_id=ctx.deps.ids.agent_id,
-            query=query,
+        chain.entity_memory(
             entity_ids=[real_user_id],
             limit=limit,
-        )
-    elif real_user_id is None and user_id:
-        core_coro = None
-    else:
-        core_coro = core_memory_repo.search_cross_session(
-            agent_id=ctx.deps.ids.agent_id,
-            query=query,
-            exclude_group_id=ctx.deps.ids.group_id,
-            exclude_user_id=ctx.deps.ids.user_id if not ctx.deps.ids.group_id else None,
-            limit=limit,
-        )
-
-    # 并发搜索核心记忆 + 知识库
-    knowledge_coro = knowledge_base_repo.search_relevant(
-        agent_id=ctx.deps.ids.agent_id,
-        query=query,
-        limit=limit,
-    )
-
-    topic_coro = topic_archive_repo.search_by_session(
-        agent_id=ctx.deps.ids.agent_id, query=query, limit=1
-    )
-
-    if core_coro is not None:
-        async with asyncio.TaskGroup() as tg:
-            core_task = tg.create_task(core_coro)
-            knowledge_task = tg.create_task(knowledge_coro)
-            topic_task = tg.create_task(topic_coro)
-        core_results = core_task.result()
-        knowledge_results = knowledge_task.result()
-        topic_results = topic_task.result()
-    else:
-        core_results = []
-        async with asyncio.TaskGroup() as tg:
-            knowledge_task = tg.create_task(knowledge_coro)
-            topic_task = tg.create_task(topic_coro)
-        knowledge_results = knowledge_task.result()
-        topic_results = topic_task.result()
-
-    # 合并结果
-    new_builder = ctx.deps.context.copy(share_context=True, empty=True)
-
-    core_memories = [r.item for r in core_results]
-    if core_memories:
-        core_block = CoreMemoryBlock(
             prefix="<related_memory>",
             suffix="</related_memory>",
-            memories=core_memories,
         )
-        new_builder.add(core_block)
-
-    knowledge_entries = [r.item for r in knowledge_results]
-    if knowledge_entries:
-        knowledge_block = KnowledgeBlock(
-            prefix="<related_knowledge>",
-            suffix="</related_knowledge>",
-            entries=knowledge_entries,
+    elif real_user_id is None and user_id:
+        pass  # user_id 无法解析，跳过核心记忆
+    else:
+        chain.cross_session_memory(
+            limit=limit,
+            prefix="<related_memory>",
+            suffix="</related_memory>",
         )
-        new_builder.add(knowledge_block)
 
-    topic_archives = [r.item for r in topic_results]
+    chain.knowledge(
+        limit=limit,
+        max_tokens=None,
+        prefix="<related_knowledge>",
+        suffix="</related_knowledge>",
+    )
+    chain.topic_archive(
+        limit=1,
+        prefix="<related_topic_archive>",
+        suffix="</related_topic_archive>",
+    )
 
-    if not core_memories and not knowledge_entries and not topic_archives:
+    sources = await chain.resolve()
+
+    if not sources:
         if real_user_id is None and user_id:
             return f"未找到与用户ID {user_id} 相关的记忆。"
         return "未找到与查询内容相关的记忆或知识。"
 
-    if topic_archives:
-        archive_msg_ids = [
-            mid for a in topic_archives for mid in a.representative_message_ids
-        ]
-        if archive_msg_ids:
-            archive_items = await memory_item_repo.get_many_by_message_ids(
-                archive_msg_ids
-            )
-            if archive_items:
-                archive_stream = MemoryItemStream.create(
-                    items=archive_items,
-                    prefix="<related_topic_archive>",
-                    suffix="</related_topic_archive>",
-                )
-                new_builder.add(archive_stream)
+    new_builder = ctx.deps.context.copy(share_context=True, empty=True)
+    new_builder.extend(sources)
 
-    logger.debug(
-        f"Found {len(core_memories)} core memories, {len(knowledge_entries)} knowledge entries, "
-        f"{len(topic_archives)} topic archives"
-    )
+    logger.debug(f"Found {len(sources)} memory sources for query: {query}")
     return new_builder.to_prompt()
 
 

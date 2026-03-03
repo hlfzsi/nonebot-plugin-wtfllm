@@ -63,3 +63,32 @@ class CrossSessionMemoryTask(RetrievalTask):
             suffix=self.suffix,
         )
         return {block}
+
+
+@dataclass
+class EntityMemoryTask(RetrievalTask):
+    """按实体ID搜索相关核心记忆（语义搜索 + 实体过滤）"""
+
+    agent_id: str
+    query: str
+    entity_ids: list[str]
+    limit: int = 5
+    prefix: str = "<core_memory>"
+    suffix: str = "</core_memory>"
+
+    async def execute(self) -> set[MemorySource]:
+        results = await core_memory_repo.search_by_entities(
+            agent_id=self.agent_id,
+            query=self.query,
+            entity_ids=self.entity_ids,
+            limit=self.limit,
+        )
+        if not results:
+            return set()
+
+        block = CoreMemoryBlock(
+            memories=[r.item for r in results],
+            prefix=self.prefix,
+            suffix=self.suffix,
+        )
+        return {block}

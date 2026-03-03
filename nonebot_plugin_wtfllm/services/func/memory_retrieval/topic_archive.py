@@ -19,6 +19,8 @@ class TopicArchiveTask(RetrievalTask):
     user_id: str | None = None
     query: str = ""
     limit: int = 3
+    prefix: str = "<archived_topic_memory>"
+    suffix: str = "</archived_topic_memory>"
 
     async def execute(self) -> set[MemorySource]:
         if not self.query:
@@ -46,8 +48,8 @@ class TopicArchiveTask(RetrievalTask):
 
         stream = MemoryItemStream.create(
             items=items,
-            prefix="<archived_topic_memory>",
-            suffix="</archived_topic_memory>",
+            prefix=self.prefix,
+            suffix=self.suffix,
             role="topic_archive",
             priority=0.25,
         )

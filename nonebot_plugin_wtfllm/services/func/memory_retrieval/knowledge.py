@@ -13,7 +13,9 @@ class KnowledgeSearchTask(RetrievalTask):
     agent_id: str
     query: str
     limit: int = 5
-    max_tokens: int = 4000
+    max_tokens: int | None = 4000
+    prefix: str = "<knowledge_base>"
+    suffix: str = "</knowledge_base>"
 
     async def execute(self) -> set[MemorySource]:
         results = await knowledge_base_repo.search_relevant(
@@ -24,21 +26,24 @@ class KnowledgeSearchTask(RetrievalTask):
         if not results:
             return set()
 
-        entries = []
-        total_tokens = 0
-        for r in results:
-            if total_tokens + r.item.token_count <= self.max_tokens:
-                entries.append(r.item)
-                total_tokens += r.item.token_count
-            else:
-                break
+        if self.max_tokens is not None:
+            entries = []
+            total_tokens = 0
+            for r in results:
+                if total_tokens + r.item.token_count <= self.max_tokens:
+                    entries.append(r.item)
+                    total_tokens += r.item.token_count
+                else:
+                    break
+        else:
+            entries = [r.item for r in results]
 
         if not entries:
             return set()
 
         block = KnowledgeBlock(
             entries=entries,
-            prefix="<knowledge_base>",
-            suffix="</knowledge_base>",
+            prefix=self.prefix,
+            suffix=self.suffix,
         )
         return {block}

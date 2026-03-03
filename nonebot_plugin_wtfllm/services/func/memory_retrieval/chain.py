@@ -8,6 +8,7 @@ from ....memory.items import MemorySource
 from .main_chat import MainChatTask
 from .core_memory import CoreMemoryTask
 from .core_memory import CrossSessionMemoryTask
+from .core_memory import EntityMemoryTask
 from .knowledge import KnowledgeSearchTask
 from .recent_react import RecentReactTask
 from .tool_history import ToolCallHistoryTask
@@ -204,13 +205,37 @@ class RetrievalChain:
             )
         )
 
+    def entity_memory(
+        self,
+        *,
+        agent_id: str = _UNSET,
+        query: str = _UNSET,
+        entity_ids: list[str],
+        limit: int = 5,
+        prefix: str = "<core_memory>",
+        suffix: str = "</core_memory>",
+    ) -> Self:
+        """添加按实体ID搜索的核心记忆检索任务"""
+        return self._add(
+            EntityMemoryTask(
+                agent_id=self._d(agent_id, self.agent_id),
+                query=self._d(query, self.query),
+                entity_ids=entity_ids,
+                limit=limit,
+                prefix=prefix,
+                suffix=suffix,
+            )
+        )
+
     def knowledge(
         self,
         *,
         agent_id: str = _UNSET,
         query: str = _UNSET,
         limit: int = 5,
-        max_tokens: int = 4000,
+        max_tokens: int | None = 4000,
+        prefix: str = "<knowledge_base>",
+        suffix: str = "</knowledge_base>",
     ) -> Self:
         """添加知识库语义搜索任务"""
         return self._add(
@@ -219,6 +244,8 @@ class RetrievalChain:
                 query=self._d(query, self.query),
                 limit=limit,
                 max_tokens=max_tokens,
+                prefix=prefix,
+                suffix=suffix,
             )
         )
 
@@ -284,6 +311,8 @@ class RetrievalChain:
         user_id: str | None = _UNSET,
         query: str = _UNSET,
         limit: int = 3,
+        prefix: str = "<archived_topic_memory>",
+        suffix: str = "</archived_topic_memory>",
     ) -> Self:
         """添加话题归档长期记忆检索任务"""
         return self._add(
@@ -293,5 +322,7 @@ class RetrievalChain:
                 user_id=self._d(user_id, self.user_id),
                 query=self._d(query, self.query),
                 limit=limit,
+                prefix=prefix,
+                suffix=suffix,
             )
         )
