@@ -7,8 +7,9 @@ from model2vec import StaticModel
 
 from ...utils import RESOURCES_DIR
 
-# 输出向量为512维
-STATICMODEL_PATH = (RESOURCES_DIR / "acge-m2v-distilled").resolve()
+# 输出向量为256维
+STATICMODEL_PATH = (RESOURCES_DIR / "m2v_bge_small_zh").resolve()
+
 
 class TopicVectorizer:
     def __init__(self, model_path: str | Path = STATICMODEL_PATH) -> None:
@@ -23,5 +24,6 @@ class TopicVectorizer:
         """批量向量化，返回 M×D 特征矩阵"""
         raw = self._model.encode(texts)
         return normalize(raw, norm="l2")
+
 
 vectorizer = TopicVectorizer()

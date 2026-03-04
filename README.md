@@ -2,7 +2,7 @@
 
 # nonebot-plugin-wtfllm
 
-_一个十分甚至有九分重量级的 Agent 实现_
+_让 Agent 记得人、记得事、记得语境，并且成本可控_
 
 ![Python](https://img.shields.io/badge/Python-≥3.11-blue)
 ![NoneBot2](https://img.shields.io/badge/NoneBot2-≥2.4.4-green)
@@ -10,15 +10,7 @@ _一个十分甚至有九分重量级的 Agent 实现_
 
 </div>
 
-**nonebot-plugin-wtfllm** 是一个面向 NoneBot2 的 LLM Agent 插件。它为你的 Bot 提供多层记忆、多模态理解、工具自主调度等能力——开箱即用，配置即走。
-
-- **三层记忆架构** —— 短期、核心、知识库，让你的 Bot 真正拥有"记性"
-- **30+ 工具自主调度** —— 联网搜索、绘图、表情包管理，一句话搞定
-- **类Skills设计**—— 足够省钱，单次请求总额约 5k token
-- **开箱即用的多模态** —— 看图识图、文生图，能力随 API 自由扩展
-- **定时消息与用户画像** —— 关注每一位用户，不遗漏任何约定
-- **OpenAI 格式 API** —— 模型自由切换，不绑定任何供应商
-- **完善的生命周期管理** —— 优雅启停，数据持久化，断电无忧
+**nonebot-plugin-wtfllm** 是一个面向 NoneBot2 的 Agent 插件。它为你的 Bot 提供多层记忆、多模态理解、工具自主调度等能力——开箱即用，配置即走。
 
 ## 为什么是 WtfLLM
 
@@ -86,7 +78,7 @@ plugins = ["nonebot_plugin_wtfllm"]
 
 有点多，但真正要关注的只有**必填配置**和可选配置中的**独立模型**。
 
-特别再次提醒，本项目的模型应当全部使用**OpenAI**接口。
+提醒，本项目的模型应当全部使用**OpenAI**接口。
 
 ### 必填配置
 

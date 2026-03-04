@@ -46,7 +46,7 @@ def build_uni_from_metions_and_reply(
     return msg
 
 
-@chat_tool_group.tool(cost=-1)
+@chat_tool_group.tool(cost=-2)
 async def send(
     ctx: Context,
     message: str,
@@ -114,7 +114,7 @@ async def send(
     return f"已发送消息: {msg}"
 
 
-@chat_tool_group.tool(cost=-1)
+@chat_tool_group.tool(cost=-2)
 async def ask(
     ctx: Context,
     question: str,

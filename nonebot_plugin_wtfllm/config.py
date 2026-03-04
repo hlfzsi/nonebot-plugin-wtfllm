@@ -43,7 +43,7 @@ class Config(BaseModel):
     )
 
     tool_point_budget: int = Field(
-        default=5,
+        default=3,
         description="工具点数预算总量，0 表示不启用预算限制",
     )
 
@@ -63,12 +63,12 @@ class Config(BaseModel):
     )
 
     core_memory_max_tokens: int = Field(
-        default=2048,
+        default=512,
         description="单个会话核心记忆的最大 token 数，超过后自动压缩",
     )
 
     core_memory_compress_ratio: float = Field(
-        default=0.6,
+        default=0.2,
         description="压缩目标比例，压缩后核心记忆占最大值的比例",
     )
 
@@ -83,7 +83,7 @@ class Config(BaseModel):
     )
 
     knowledge_base_max_tokens: int = Field(
-        default=1024,
+        default=256,
         description="知识库在 prompt 中的最大 token 数",
     )
 
@@ -188,16 +188,16 @@ class Config(BaseModel):
         description="每个会话最大活跃话题数",
     )
     topic_decay_minutes: int = Field(
-        default=60,
+        default=30,
         description="话题不活跃超过此时间(分钟)后被清理",
     )
     topic_max_context_messages: int = Field(
-        default=10,
+        default=5,
         description="话题上下文检索的最大消息数",
     )
     topic_archive_min_messages: int = Field(
-        default=10,
-        description="簇最少消息数才归档到长期记忆",
+        default=5,
+        description="簇消息数 >= 此值才归档到长期记忆",
     )
     topic_archive_mmr_k: int = Field(
         default=5,

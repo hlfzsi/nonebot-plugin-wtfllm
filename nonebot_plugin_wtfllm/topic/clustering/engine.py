@@ -53,7 +53,7 @@ class TopicClustering:
             self._last_active[best_label] = now
             return best_label, None
 
-        # 需要新簇 — 容量满时淘汰衰减权重最低的簇
+        # 容量满时淘汰衰减权重最低的簇
         if len(self._centroids) >= self._max_clusters:
             eviction_candidate = self._evict_weakest(
                 now, state, session_key, min_archive_messages
@@ -79,7 +79,7 @@ class TopicClustering:
         session_key: SessionKey,
         min_archive_messages: int = 10,
     ) -> tuple[list[int], list[ArchivalCandidate]]:
-        """从会话状态中移除过期话题簇，同步清理内部质心。
+        """从会话状态中移除过期话题簇，清理内部质心。
 
         返回 (被清理的簇标签列表, 符合归档条件的候选列表)。
         """
@@ -105,7 +105,7 @@ class TopicClustering:
         return pruned, candidates
 
     def _effective_threshold(self, label: int) -> float:
-        """大簇惯性：簇越大，准入阈值越高，防止黑洞吞噬。"""
+        """簇越大，准入阈值越高。"""
         count = self._counts.get(label, 0)
         ratio = min(count / self._CENTROID_WEIGHT_CAP, 1.0)
         return self._threshold + self._INERTIA_ALPHA * ratio

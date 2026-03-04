@@ -130,8 +130,8 @@ async def _compress_memories(
     prompt = (
         "你是一个记忆压缩助手。以下是一组旧的核心记忆条目，请将它们合并精炼为更少的条目。\n"
         "要求：\n"
-        "1. 保留所有重要信息，合并重复或相似的内容\n"
-        "2. 保持 {{entity_id}} 格式的实体引用不变\n"
+        "1. 保留所有重要信息，合并重复或相似的内容, 剔除过时的内容\n"
+        "2. 保持 {{entity_id}} 格式的实体引用无论如何都不要改变\n"
         "3. 每条记忆仍应聚焦一个主题\n"
         "4. 用换行分隔每条新记忆，每行一条\n"
         "5. 直接输出精炼后的记忆，不要有多余说明\n\n"
@@ -169,5 +169,7 @@ async def _compress_memories(
             related_entities=related,
         )
         compressed_memories.append(memory)
+
+    logger.debug(result.usage())
 
     return compressed_memories

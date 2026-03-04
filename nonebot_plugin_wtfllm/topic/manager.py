@@ -32,7 +32,6 @@ class TopicManager:
         cluster_threshold: float = 0.5,
         max_clusters: int = 30,
         decay_seconds: float = 7200,
-        maintenance_interval: int = 100,
         max_messages_per_cluster: int = 200,
         min_archive_messages: int = 10,
     ) -> None:
@@ -42,12 +41,12 @@ class TopicManager:
         self._cluster_threshold = cluster_threshold
         self._max_clusters = max_clusters
         self._decay_seconds = decay_seconds
-        self._maintenance_interval = maintenance_interval
         self._max_messages_per_cluster = max_messages_per_cluster
         self._min_archive_messages = min_archive_messages
 
         self._archive_queue: asyncio.Queue[ArchivalCandidate] = asyncio.Queue()
         self._archive_worker: asyncio.Task[None] | None = None
+        self._prune_worker: asyncio.Task[None] | None = None
         self._archive_handlers: (
             list[Callable[[ArchivalCandidate], Coroutine[Any, Any, None]]] | None
         ) = None
@@ -56,23 +55,27 @@ class TopicManager:
         self,
         handler: Callable[[ArchivalCandidate], Coroutine[Any, Any, None]] | None = None,
     ) -> None:
-        """启动后台归档 worker。"""
+        """启动后台归档 worker 和定时清理 worker。"""
         if self._archive_handlers is None:
             self._archive_handlers = []
         if handler is not None:
             self._archive_handlers.append(handler)
         if self._archive_worker is None:
             self._archive_worker = asyncio.create_task(self._archive_consumer())
+        if self._prune_worker is None:
+            self._prune_worker = asyncio.create_task(self._periodic_prune())
 
     async def stop(self) -> None:
-        """停止归档 worker。"""
-        if self._archive_worker:
-            self._archive_worker.cancel()
-            try:
-                await self._archive_worker
-            except asyncio.CancelledError:
-                pass
-            self._archive_worker = None
+        """停止归档 worker 和定时清理 worker。"""
+        for task in (self._archive_worker, self._prune_worker):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._archive_worker = None
+        self._prune_worker = None
 
     async def _archive_consumer(self) -> None:
         """后台消费者：从队列取候选并执行归档。"""
@@ -87,6 +90,29 @@ class TopicManager:
                 logger.opt(exception=True).warning("cluster archival failed")
             finally:
                 self._archive_queue.task_done()
+
+    async def _periodic_prune(self) -> None:
+        """定时扫描所有会话，清理过期簇。
+
+        每 decay_seconds / 2 执行一次，确保静默期内过期簇也能被及时清理。
+        """
+        interval = max(self._decay_seconds / 2, 60)
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                async with self._lock:
+                    sessions_snapshot = list(self._sessions.items())
+                for cache_key, ctx in sessions_snapshot:
+                    async with ctx.lock:
+                        _pruned, prune_candidates = ctx.clustering.prune_stale_topics(
+                            ctx.state,
+                            session_key=ctx.state.session_key,
+                            min_archive_messages=self._min_archive_messages,
+                        )
+                        for candidate in prune_candidates:
+                            self._archive_queue.put_nowait(candidate)
+            except Exception:
+                logger.opt(exception=True).warning("periodic prune failed")
 
     def _get_or_create(self, key: SessionKey) -> _SessionContext:
         cache_key = key.cache_key
@@ -152,16 +178,6 @@ class TopicManager:
             # 入队淘汰候选
             if eviction_candidate is not None:
                 self._archive_queue.put_nowait(eviction_candidate)
-
-            # 周期性超时清理
-            if state.total_messages_ingested % self._maintenance_interval == 0:
-                _pruned, prune_candidates = ctx.clustering.prune_stale_topics(
-                    state,
-                    session_key=key,
-                    min_archive_messages=self._min_archive_messages,
-                )
-                for candidate in prune_candidates:
-                    self._archive_queue.put_nowait(candidate)
 
             return label
 
