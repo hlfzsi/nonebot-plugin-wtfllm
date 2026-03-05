@@ -143,12 +143,14 @@ class TestTopicManagerMaintenance:
     async def test_maintenance_runs_without_error(self):
         manager = TopicManager(
             maxsize=10,
-            maintenance_interval=5,  # 每 5 条消息触发一次维护
             decay_seconds=0.01,  # 极短衰减时间
         )
+        manager.start()
         for i in range(10):
             await manager.ingest("a1", "g1", None, f"msg{i}", f"消息内容{i}")
-        # 应该跑过至少一次维护而不崩溃
+        await asyncio.sleep(0.05)
+        await manager.stop()
+        # 周期清理 worker 可运行且不崩溃
 
 
 class TestTopicManagerArchiveQueue:
@@ -195,9 +197,9 @@ class TestTopicManagerArchiveQueue:
             cluster_threshold=0.5,
             max_clusters=30,
             decay_seconds=0.01,  # 极短衰减
-            maintenance_interval=5,
             min_archive_messages=1,
         )
+        manager.start()
         # 先摄入几条消息建立簇
         for i in range(4):
             await manager.ingest("a1", "g1", None, f"msg{i}", f"消息内容{i}关于美食")
@@ -206,8 +208,10 @@ class TestTopicManagerArchiveQueue:
         import asyncio
         await asyncio.sleep(0.05)
 
-        # 第 5 条触发维护 (maintenance_interval=5)
+        # 再摄入一条不同消息，并等待周期清理
         await manager.ingest("a1", "g1", None, "msg4", "消息内容4关于技术编程")
+        await asyncio.sleep(0.05)
 
         # 队列中可能有因超时清理产生的候选
         # (具体是否有取决于簇的消息数是否 >= min_archive_messages)
+        await manager.stop()

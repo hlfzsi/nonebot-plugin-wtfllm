@@ -742,174 +742,155 @@ class TestGetFullMessageDetail:
         ctx = _make_context()
         mock_item = MagicMock()
         mock_item.message_id = "msg_001"
-        mock_item.content.to_llm_context.return_value = "Full message content here"
         ctx.deps.context.resolve_memory_ref = MagicMock(return_value=mock_item)
 
         mock_llm_ctx = MagicMock()
         ctx.deps.context.ctx.copy.return_value = mock_llm_ctx
+        new_builder = MagicMock()
+        new_builder.to_prompt.return_value = "<message_detail>ok</message_detail>"
+        ctx.deps.context.copy = MagicMock(return_value=new_builder)
 
-        result = await _get_full_message_detail(ctx, message_ref=7)
-        assert result == "Full message content here"
+        with patch(
+            "nonebot_plugin_wtfllm.llm.tools.tool_group.core.memory_item_repo"
+        ) as mock_repo:
+            mock_repo.get_chain_by_message_ids = AsyncMock(
+                return_value=[_make_memory_item("msg_001", 1000)]
+            )
+
+            result = await _get_full_message_detail(ctx, message_ref=7)
+
+        assert result == "<message_detail>ok</message_detail>"
+        mock_repo.get_chain_by_message_ids.assert_called_once_with(["msg_001"])
         mock_llm_ctx.set_condense.assert_called_once_with(False)
-        mock_item.content.to_llm_context.assert_called_once_with(
-            mock_llm_ctx, "msg_001", 7
+        ctx.deps.context.copy.assert_called_once_with(
+            share_context=mock_llm_ctx, empty=True
         )
+        new_builder.add.assert_called_once()
 
 
 # ===================== query_memory 测试 =====================
 
 
-@patch(
-    "nonebot_plugin_wtfllm.llm.tools.tool_group.core.topic_archive_repo",
-    **{"search_by_session": AsyncMock(return_value=[])},
-)
 class TestQueryMemory:
     """query_memory 工具测试"""
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.KnowledgeBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_with_user_id_resolved(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
-    ):
-        """user_id 提供且 resolve 成功 -> search_by_entities"""
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_with_user_id_resolved(self, mock_chain_cls):
+        """user_id 提供且 resolve 成功 -> entity_memory"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
         ctx.deps.context.resolve_aliases = MagicMock(return_value="real_u2")
-        ctx.deps.context.copy.return_value = MagicMock()
-        ctx.deps.context.copy.return_value.to_prompt.return_value = "<memory_result>"
-        ctx.deps.context.copy.return_value.add = MagicMock()
+        builder = MagicMock()
+        builder.to_prompt.return_value = "<memory_result>"
+        ctx.deps.context.copy.return_value = builder
 
-        core_result = MagicMock()
-        core_result.item = MagicMock()
-        kb_result = MagicMock()
-        kb_result.item = MagicMock()
-
-        mock_core_repo.search_by_entities = AsyncMock(return_value=[core_result])
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[kb_result])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[MagicMock()])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="hello", user_id="u2", limit=5)
-        mock_core_repo.search_by_entities.assert_called_once_with(
-            agent_id="a1", query="hello", entity_ids=["real_u2"], limit=5
+        mock_chain_cls.assert_called_once_with(
+            agent_id="a1",
+            group_id="g1",
+            user_id="u1",
+            query="hello",
         )
-        mock_kb_repo.search_relevant.assert_called_once_with(
-            agent_id="a1", query="hello", limit=5
+        chain.entity_memory.assert_called_once_with(
+            entity_ids=["real_u2"],
+            limit=5,
+            prefix="<related_memory>",
+            suffix="</related_memory>",
         )
+        chain.cross_session_memory.assert_not_called()
         assert result == "<memory_result>"
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_user_id_not_resolved(self, mock_core_repo, mock_kb_repo, _mock_ta_repo):
-        """user_id 提供但 resolve 返回 None -> core_coro=None, 仅搜索知识库"""
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_user_id_not_resolved(self, mock_chain_cls):
+        """user_id 提供但 resolve 返回 None -> 不走核心记忆分支"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
         ctx.deps.context.resolve_aliases = MagicMock(return_value=None)
-
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="test", user_id="unknown_user")
         assert "未找到与用户ID unknown_user 相关的记忆" in result
-        mock_core_repo.search_by_entities.assert_not_called()
-        mock_core_repo.search_cross_session.assert_not_called()
+        chain.entity_memory.assert_not_called()
+        chain.cross_session_memory.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.KnowledgeBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_user_id_cross_session(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
-    ):
-        """user_id=None -> search_cross_session"""
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_no_user_id_cross_session(self, mock_chain_cls):
+        """user_id=None -> cross_session_memory"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
-        ctx.deps.context.copy.return_value = MagicMock()
-        ctx.deps.context.copy.return_value.to_prompt.return_value = "<cross_result>"
-        ctx.deps.context.copy.return_value.add = MagicMock()
+        builder = MagicMock()
+        builder.to_prompt.return_value = "<cross_result>"
+        ctx.deps.context.copy.return_value = builder
 
-        core_result = MagicMock()
-        core_result.item = MagicMock()
-        mock_core_repo.search_cross_session = AsyncMock(return_value=[core_result])
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[MagicMock()])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="cross", user_id=None, limit=3)
-        mock_core_repo.search_cross_session.assert_called_once_with(
-            agent_id="a1",
-            query="cross",
-            exclude_group_id="g1",
-            exclude_user_id=None,
+        chain.cross_session_memory.assert_called_once_with(
             limit=3,
+            prefix="<related_memory>",
+            suffix="</related_memory>",
         )
         assert result == "<cross_result>"
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.KnowledgeBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_user_id_private_chat_cross_session(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
-    ):
-        """私聊且 user_id=None -> exclude_user_id 应传实际值"""
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_no_user_id_private_chat_cross_session(self, mock_chain_cls):
+        """私聊且 user_id=None -> 仍走 cross_session_memory"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
-        ctx.deps.context.copy.return_value = MagicMock()
-        ctx.deps.context.copy.return_value.to_prompt.return_value = "<private_cross>"
-        ctx.deps.context.copy.return_value.add = MagicMock()
+        builder = MagicMock()
+        builder.to_prompt.return_value = "<private_cross>"
+        ctx.deps.context.copy.return_value = builder
 
-        core_result = MagicMock()
-        core_result.item = MagicMock()
-        mock_core_repo.search_cross_session = AsyncMock(return_value=[core_result])
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[MagicMock()])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="private", limit=2)
-        mock_core_repo.search_cross_session.assert_called_once_with(
-            agent_id="a1",
-            query="private",
-            exclude_group_id=None,
-            exclude_user_id="u1",
+        chain.cross_session_memory.assert_called_once_with(
             limit=2,
+            prefix="<related_memory>",
+            suffix="</related_memory>",
         )
         assert result == "<private_cross>"
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_no_results_returns_message(self, mock_core_repo, mock_kb_repo, _mock_ta_repo):
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_no_results_returns_message(self, mock_chain_cls):
         """无结果时返回提示文本"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
-        ctx.deps.context.copy.return_value = MagicMock()
-        ctx.deps.context.copy.return_value.add = MagicMock()
-
-        mock_core_repo.search_cross_session = AsyncMock(return_value=[])
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="nothing")
         assert "未找到与查询内容相关的记忆或知识" in result
 
     @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.KnowledgeBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.CoreMemoryBlock")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.knowledge_base_repo")
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.core_memory_repo")
-    async def test_only_knowledge_results(
-        self, mock_core_repo, mock_kb_repo, mock_cmb, mock_kbb, _mock_ta_repo
-    ):
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.RetrievalChain")
+    async def test_only_knowledge_results(self, mock_chain_cls):
         """仅有知识库结果时也应正确返回"""
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
-        ctx.deps.context.copy.return_value = MagicMock()
-        ctx.deps.context.copy.return_value.to_prompt.return_value = "<kb_only>"
-        ctx.deps.context.copy.return_value.add = MagicMock()
+        builder = MagicMock()
+        builder.to_prompt.return_value = "<kb_only>"
+        ctx.deps.context.copy.return_value = builder
 
-        kb_result = MagicMock()
-        kb_result.item = MagicMock()
-        mock_core_repo.search_cross_session = AsyncMock(return_value=[])
-        mock_kb_repo.search_relevant = AsyncMock(return_value=[kb_result])
+        chain = MagicMock()
+        chain.resolve = AsyncMock(return_value=[MagicMock()])
+        mock_chain_cls.return_value = chain
 
         result = await _query_memory(ctx, query="knowledge only")
         assert result == "<kb_only>"

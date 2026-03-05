@@ -77,7 +77,7 @@ class TestChatAgentFake:
                         tool_name="final_result_TextResponse",
                         args=json.dumps(
                             {
-                                "response": "你好！很高兴认识你",
+                                "responses": ["你好！很高兴认识你"],
                                 "mentions": [],
                                 "meme": None,
                             }
@@ -94,7 +94,7 @@ class TestChatAgentFake:
 
         result = await agent.run("你好", deps=_make_deps())
         assert isinstance(result.output, TextResponse)
-        assert "你好" in result.output.response
+        assert any("你好" in text for text in result.output.responses)
 
     @pytest.mark.asyncio
     async def test_chat_agent_returns_reject_response(self):
@@ -280,7 +280,11 @@ class TestAgentOverride:
                     ToolCallPart(
                         tool_name="final_result_TextResponse",
                         args=json.dumps(
-                            {"response": "fake response", "mentions": [], "meme": None}
+                            {
+                                "responses": ["fake response"],
+                                "mentions": [],
+                                "meme": None,
+                            }
                         ),
                     )
                 ]
@@ -289,7 +293,7 @@ class TestAgentOverride:
         with dummy_agent.override(model=FunctionModel(fake_chat)):
             result = await dummy_agent.run("hello", deps=_make_deps())
             assert isinstance(result.output, TextResponse)
-            assert result.output.response == "fake response"
+            assert result.output.responses == ["fake response"]
 
 
 # ===================== 消息追踪测试 =====================

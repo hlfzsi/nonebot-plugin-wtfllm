@@ -43,14 +43,42 @@ class SendableResponse(BaseModel, ABC):
             except (OSError, ValueError, RuntimeError, SQLAlchemyError) as e:
                 logger.error(f"Failed to persist empty tool call record: {e}")
 
-        await self._perform_send(context, extra_segments)
+        results = await self._perform_send(context, extra_segments)
+        if results is None:
+            return
+        await self._post_send_messages(context, results)
+
+    async def _post_send_messages(
+        self, context: AgentDeps, results: List[Tuple[UniMessage, Receipt, bool]]
+    ) -> None:
+        """发送后处理逻辑"""
+        if not context.nb_runtime:
+            return
+
+        for uni_msg, receipt, ingest_topic in results:
+            msg_id = ensure_msgid_from_receipt(receipt, context.nb_runtime.session)
+            await store_message_with_context(
+                agent_id=context.ids.agent_id,
+                uni_msg=uni_msg,
+                sender=context.ids.agent_id,
+                msg_id=msg_id,
+                user_id=context.ids.user_id,
+                group_id=context.ids.group_id,
+                track_message=True,
+                ingest_topic=ingest_topic,
+            )
 
     @abstractmethod
     async def _perform_send(
         self,
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
-    ) -> None: ...
+    ) -> List[Tuple[UniMessage, Receipt, bool]] | None:
+        """
+        子类需返回一个列表，每个元素包含：
+        (UniMessage对象, 发送回执Receipt, 是否执行ingest_topic)
+        """
+        ...
 
 
 class VoiceResponse(SendableResponse):
@@ -61,7 +89,7 @@ class VoiceResponse(SendableResponse):
         self,
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
-    ) -> None:
+    ) -> List[Tuple[UniMessage, Receipt, bool]]:
         raise NotImplementedError("VoiceResponse is not implemented yet.")
 
 
@@ -76,24 +104,18 @@ class MarkdownResponse(SendableResponse):
         self,
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
-    ):
-        if not context.nb_runtime:
-            raise ValueError("NonebotRuntime is required to send MarkdownResponse")
-        if not context.ids.user_id:
-            raise ValueError("User ID is required to send MarkdownResponse")
+    ) -> List[Tuple[UniMessage, Receipt, bool]]:
+        if not context.nb_runtime or not context.ids.user_id:
+            raise ValueError("Context information missing")
 
-        sent_messages_receipt: List[Receipt] = []
-        sent_messages_content: List[UniMessage] = []
+        results: List[Tuple[UniMessage, Receipt, bool]] = []
 
         markdown_img = await render_markdown_to_image(self.markdown_content)
+        msg1 = UniMessage(Image(raw=markdown_img, name="response.webp"))
+        msg1[0].desc = self.summary  # pyright: ignore
 
-        _image = Image(raw=markdown_img, name="response.webp")
-        _image.desc = self.summary  # pyright: ignore[reportAttributeAccessIssue]
-
-        msg1 = UniMessage()
-        msg1 += _image
-        sent_messages_receipt.append(await msg1.send(target=context.nb_runtime.target))
-        sent_messages_content.append(msg1)
+        receipt1 = await msg1.send(target=context.nb_runtime.target)
+        results.append((msg1, receipt1, False))
 
         if context.reply_segments or extra_segments:
             msg2 = UniMessage()
@@ -101,22 +123,11 @@ class MarkdownResponse(SendableResponse):
                 msg2 += context.reply_segments
             if extra_segments:
                 msg2 += extra_segments
-            sent_messages_receipt.append(
-                await msg2.send(target=context.nb_runtime.target)
-            )
-            sent_messages_content.append(msg2)
 
-        for content, receipt in zip(sent_messages_content, sent_messages_receipt):
-            msg_id = ensure_msgid_from_receipt(receipt, context.nb_runtime.session)
-            await store_message_with_context(
-                agent_id=context.ids.agent_id,
-                uni_msg=content,
-                sender=context.ids.agent_id,
-                msg_id=msg_id,
-                user_id=context.ids.user_id,
-                group_id=context.ids.group_id,
-                track_message=True,
-            )
+            receipt2 = await msg2.send(target=context.nb_runtime.target)
+            results.append((msg2, receipt2, False))
+
+        return results
 
 
 class TextResponse(SendableResponse):
@@ -129,7 +140,9 @@ class TextResponse(SendableResponse):
         description="回复中需要特别提及的用户列表",
     )
 
-    response: str = Field(..., description="给用户的自然语言回复, 纯文本")
+    responses: List[str] = Field(
+        ..., description="给用户的自然语言回复列表, 每个元素会被分割发送, 均为纯文本"
+    )
 
     meme: str | None = Field(
         None,
@@ -140,68 +153,65 @@ class TextResponse(SendableResponse):
         self,
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
-    ):
+    ) -> List[Tuple[UniMessage, Receipt, bool]]:
         if not context.nb_runtime:
             raise ValueError("NonebotRuntime is required to send TextResponse")
         if not context.ids.user_id:
             raise ValueError("User ID is required to send TextResponse")
 
-        msg = UniMessage()
-        for mention in self.mentions:
-            mention = context.context.resolve_aliases(mention)
-            if mention:
-                msg.at(mention)
+        texts = self.responses or [""]
+        results: List[Tuple[UniMessage, Receipt, bool]] = []
 
-        msg.text(self.response)
+        for idx, text in enumerate(texts):
+            is_first = idx == 0
+            is_last = idx == len(texts) - 1
 
-        if context.reply_segments:
-            msg += context.reply_segments
+            msg = UniMessage()
 
-        if self.meme:
-            try:
-                _meme = context.context.resolve_media_ref(self.meme, ImageSegment)
-            except ValueError:
-                _meme = None
+            if is_first:
+                for mention in self.mentions:
+                    mention = context.context.resolve_aliases(mention)
+                    if mention:
+                        msg.at(mention)
+                if context.reply_segments:
+                    msg += context.reply_segments
 
-            if _meme and _meme.available:
-                if _meme.local_path:
-                    image_data = await _meme.get_bytes_async()
-                    msg.image(raw=image_data)
-                elif _meme.url:
-                    msg.image(url=_meme.url)
+            msg.text(text)
 
-            else:
+            if is_last and self.meme:
                 try:
-                    _meme = await meme_repo.get_meme_by_id(self.meme)
-                    if _meme:
-                        _bytes = await _meme.get_bytes_async()
-                        msg.image(raw=_bytes, name=f"{_meme.storage_id}.webp")
-                    else:
-                        logger.warning(
-                            f"FinalResponse: Meme with UUID {self.meme} not found."
-                        )
+                    _meme = context.context.resolve_media_ref(self.meme, ImageSegment)
+                except ValueError:
+                    _meme = None
+
+                if _meme and _meme.available:
+                    if _meme.local_path:
+                        image_data = await _meme.get_bytes_async()
+                        msg.image(raw=image_data)
+                    elif _meme.url:
+                        msg.image(url=_meme.url)
+                else:
+                    try:
+                        _meme = await meme_repo.get_meme_by_id(self.meme)
+                        if _meme:
+                            _bytes = await _meme.get_bytes_async()
+                            msg.image(raw=_bytes, name=f"{_meme.storage_id}.webp")
+                        else:
+                            logger.warning(
+                                f"FinalResponse: Meme with UUID {self.meme} not found."
+                            )
+                            msg.text("\n哎呀图丢了")
+                    except (OSError, ValueError, RuntimeError):
+                        logger.exception("FinalResponse: Error fetching meme by UUID.")
                         msg.text("\n哎呀图丢了")
-                except (OSError, ValueError, RuntimeError):
-                    logger.exception("FinalResponse: Error fetching meme by UUID.")
-                    msg.text("\n哎呀图丢了")
 
-        if extra_segments:
-            msg += extra_segments
+            if is_last and extra_segments:
+                msg += extra_segments
 
-        sent_message = await msg.send(target=context.nb_runtime.target)
-        sent_msg_id = ensure_msgid_from_receipt(
-            sent_message, context.nb_runtime.session
-        )
-        await store_message_with_context(
-            agent_id=context.ids.agent_id,
-            uni_msg=msg,
-            sender=context.ids.agent_id,
-            msg_id=sent_msg_id,
-            user_id=context.ids.user_id,
-            group_id=context.ids.group_id,
-            track_message=True,
-            ingest_topic=True,
-        )
+            sent_message = await msg.send(target=context.nb_runtime.target)
+            results.append((msg, sent_message, True))
+
+        return results
 
 
 class RejectResponse(SendableResponse):
@@ -220,7 +230,7 @@ class RejectResponse(SendableResponse):
         self,
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
-    ):
+    ) -> List[Tuple[UniMessage, Receipt, bool]] | None:
         if not context.nb_runtime:
             raise ValueError("NonebotRuntime is required to handle RejectResponse")
         if not context.ids.user_id:
@@ -231,6 +241,7 @@ class RejectResponse(SendableResponse):
         )
 
         msg = None
+        results: List[Tuple[UniMessage, Receipt, bool]] = []
 
         if self.message_to_user:
             msg = UniMessage()
@@ -242,21 +253,9 @@ class RejectResponse(SendableResponse):
             if extra_segments:
                 msg += extra_segments
             sent_message = await msg.send(target=context.nb_runtime.target)
+            results.append((msg, sent_message, True))
 
-            sent_msg_id = ensure_msgid_from_receipt(
-                sent_message, context.nb_runtime.session
-            )
-
-            await store_message_with_context(
-                agent_id=context.ids.agent_id,
-                uni_msg=msg,
-                sender=context.ids.agent_id,
-                msg_id=sent_msg_id,
-                user_id=context.ids.user_id,
-                group_id=context.ids.group_id,
-                track_message=True,
-                ingest_topic=True,
-            )
+        return results
 
 
 CHAT_OUTPUT: Tuple[Type[SendableResponse], ...] = (

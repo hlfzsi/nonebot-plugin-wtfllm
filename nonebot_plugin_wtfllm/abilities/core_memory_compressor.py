@@ -125,7 +125,7 @@ async def _compress_memories(
 ) -> List[CoreMemory]:
     """用 LLM 将多条旧记忆压缩为更少的精炼记忆"""
 
-    memory_texts = "\n".join(f"- [{m.storage_id[:8]}] {m.content}" for m in memories)
+    memory_texts = "\n".join(f"- {m.content}" for m in memories)
 
     prompt = (
         "你是一个记忆压缩助手。以下是一组旧的核心记忆条目，请将它们合并精炼为更少的条目。\n"

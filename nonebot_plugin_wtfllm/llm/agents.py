@@ -65,6 +65,7 @@ CHAT_AGENT = Agent(
     output_type=CHAT_OUTPUT,
     deps_type=AgentDeps,
     history_processors=[inject_new_messages],
+    retries=3,
     model_settings=ModelSettings(
         parallel_tool_calls=True,
         extra_body={

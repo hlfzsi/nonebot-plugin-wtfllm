@@ -57,14 +57,14 @@ class TestTextResponseModel:
     """TextResponse 模型测试"""
 
     def test_create_basic(self):
-        resp = TextResponse(response="Hello!", meme=None)
-        assert resp.response == "Hello!"
+        resp = TextResponse(responses=["Hello!"], meme=None)
+        assert resp.responses == ["Hello!"]
         assert resp.meme is None
         assert resp.mentions == []
 
     def test_create_with_mentions(self):
         resp = TextResponse(
-            response="Hi there",
+            responses=["Hi there"],
             mentions=["user_a", "user_b"],
             meme=None,
         )
@@ -72,7 +72,7 @@ class TestTextResponseModel:
 
     def test_create_with_meme(self):
         resp = TextResponse(
-            response="look", meme="uuid-123"
+            responses=["look"], meme="uuid-123"
         )
         assert resp.meme == "uuid-123"
 
@@ -126,14 +126,14 @@ class TestTextResponseSend:
     @pytest.mark.asyncio
     async def test_send_requires_runtime(self):
         deps = _make_deps(with_runtime=False)
-        resp = TextResponse(response="test", meme=None)
+        resp = TextResponse(responses=["test"], meme=None)
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp.send(deps)
 
     @pytest.mark.asyncio
     async def test_send_requires_user_id(self):
         deps = _make_deps(user_id=None)
-        resp = TextResponse(response="test", meme=None)
+        resp = TextResponse(responses=["test"], meme=None)
         with pytest.raises(ValueError, match="User ID"):
             await resp.send(deps)
 
@@ -157,7 +157,7 @@ class TestTextResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="Hello!", meme=None)
+            resp = TextResponse(responses=["Hello!"], meme=None)
             await resp.send(deps)
 
             mock_store.assert_called_once()
@@ -219,7 +219,7 @@ class TestMarkdownResponseSend:
             markdown_content="# Test",
             summary="Test summary",
         )
-        with pytest.raises(ValueError, match="NonebotRuntime"):
+        with pytest.raises(ValueError, match="Context information missing"):
             await resp.send(deps)
 
 
@@ -266,7 +266,7 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="ok", meme=None)
+            resp = TextResponse(responses=["ok"], meme=None)
             await resp.send(deps)
 
         mock_repo.save_batch_from_tool_call_info.assert_called_once_with(
@@ -296,7 +296,7 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="ok", meme=None)
+            resp = TextResponse(responses=["ok"], meme=None)
             await resp.send(deps)
 
         mock_repo.save_empty_record.assert_called_once_with(
@@ -328,7 +328,7 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="ok", meme=None)
+            resp = TextResponse(responses=["ok"], meme=None)
             # 不应抛出异常，_perform_send 仍应执行
             await resp.send(deps)
 
@@ -346,7 +346,7 @@ class TestTextResponsePerformSend:
     async def test_no_runtime_raises(self):
         """nb_runtime=None 时抛出 ValueError"""
         deps = _make_deps(with_runtime=False)
-        resp = TextResponse(response="test", meme=None)
+        resp = TextResponse(responses=["test"], meme=None)
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp._perform_send(deps)
 
@@ -354,7 +354,7 @@ class TestTextResponsePerformSend:
     async def test_no_user_id_raises(self):
         """user_id=None 时抛出 ValueError"""
         deps = _make_deps(user_id=None)
-        resp = TextResponse(response="test", meme=None)
+        resp = TextResponse(responses=["test"], meme=None)
         with pytest.raises(ValueError, match="User ID"):
             await resp._perform_send(deps)
 
@@ -372,8 +372,8 @@ class TestTextResponsePerformSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="Hello world", meme=None)
-            await resp._perform_send(deps)
+            resp = TextResponse(responses=["Hello world"], meme=None)
+            results = await resp._perform_send(deps)
 
             # 应调用 text() 而不调用 at()
             mock_msg.text.assert_called_once_with("Hello world")
@@ -381,18 +381,10 @@ class TestTextResponsePerformSend:
             mock_msg.send.assert_called_once_with(
                 target=deps.nb_runtime.target
             )
+            assert results == [(mock_msg, mock_receipt, True)]
 
-        mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
-        mock_store.assert_called_once_with(
-            agent_id="a1",
-            uni_msg=mock_msg,
-            sender="a1",
-            msg_id="msg-001",
-            user_id="u1",
-            group_id="g1",
-            track_message=True,
-            ingest_topic=True,
-        )
+        mock_ensure.assert_not_called()
+        mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -413,7 +405,7 @@ class TestTextResponsePerformSend:
             MockUniMsg.return_value = mock_msg
 
             resp = TextResponse(
-                response="Hi!",
+                responses=["Hi!"],
                 mentions=["alice", "bob"],
                 meme=None,
             )
@@ -457,7 +449,7 @@ class TestTextResponsePerformSend:
             MockUniMsg.return_value = mock_msg
 
             resp = TextResponse(
-                response="Look at this!",
+                responses=["Look at this!"],
                 meme="meme-uuid-1",
             )
             await resp._perform_send(deps)
@@ -517,7 +509,7 @@ class TestRejectResponsePerformSend:
                 reason="off topic",
                 message_to_user="Sorry, I cannot help with that.",
             )
-            await resp._perform_send(deps)
+            results = await resp._perform_send(deps)
 
             # 应调用 text() 并发送
             mock_msg.text.assert_called_once_with(
@@ -526,18 +518,10 @@ class TestRejectResponsePerformSend:
             mock_msg.send.assert_called_once_with(
                 target=deps.nb_runtime.target
             )
+            assert results == [(mock_msg, mock_receipt, True)]
 
-        mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
-        mock_store.assert_called_once_with(
-            agent_id="a1",
-            uni_msg=mock_msg,
-            sender="a1",
-            msg_id="rej-msg-001",
-            user_id="u1",
-            group_id="g1",
-            track_message=True,
-            ingest_topic=True,
-        )
+        mock_ensure.assert_not_called()
+        mock_store.assert_not_called()
 
 
 # ===================== 补充测试：MarkdownResponse._perform_send =====================
@@ -554,7 +538,7 @@ class TestMarkdownResponsePerformSend:
             markdown_content="# Test",
             summary="Test",
         )
-        with pytest.raises(ValueError, match="NonebotRuntime"):
+        with pytest.raises(ValueError, match="Context information missing"):
             await resp._perform_send(deps)
 
     @pytest.mark.asyncio
@@ -585,7 +569,7 @@ class TestMarkdownResponsePerformSend:
                 markdown_content="# Hello\n\nWorld",
                 summary="Hello world summary",
             )
-            await resp._perform_send(deps)
+            results = await resp._perform_send(deps)
 
             # 应渲染 markdown
             mock_render.assert_called_once_with("# Hello\n\nWorld")
@@ -599,17 +583,10 @@ class TestMarkdownResponsePerformSend:
             mock_msg.send.assert_called_once_with(
                 target=deps.nb_runtime.target
             )
+            assert results == [(mock_msg, mock_receipt, False)]
 
-        mock_ensure.assert_called_once_with(mock_receipt, deps.nb_runtime.session)
-        mock_store.assert_called_once_with(
-            agent_id="a1",
-            uni_msg=mock_msg,
-            sender="a1",
-            msg_id="md-msg-001",
-            user_id="u1",
-            group_id="g1",
-            track_message=True,
-        )
+        mock_ensure.assert_not_called()
+        mock_store.assert_not_called()
 
 
 # ===================== 补充测试：TextResponse meme URL 路径 =====================
@@ -641,7 +618,7 @@ class TestTextResponseMemeUrl:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="check this", meme="IMG:1")
+            resp = TextResponse(responses=["check this"], meme="IMG:1")
             await resp._perform_send(deps)
 
             mock_msg.image.assert_called_once_with(url="http://example.com/meme.jpg")
@@ -675,7 +652,7 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="look", meme="meme-uuid")
+            resp = TextResponse(responses=["look"], meme="meme-uuid")
             await resp._perform_send(deps)
 
             mock_meme_repo.get_meme_by_id.assert_called_once_with("meme-uuid")
@@ -702,7 +679,7 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="look", meme="nonexistent")
+            resp = TextResponse(responses=["look"], meme="nonexistent")
             await resp._perform_send(deps)
 
             # 应调用 text("\n哎呀图丢了")
@@ -727,7 +704,7 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="look", meme="broken")
+            resp = TextResponse(responses=["look"], meme="broken")
             await resp._perform_send(deps)
 
             mock_msg.text.assert_any_call("\n哎呀图丢了")
@@ -753,7 +730,7 @@ class TestTextResponseWithReplySegments:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="Hello!", meme=None)
+            resp = TextResponse(responses=["Hello!"], meme=None)
             await resp._perform_send(deps)
 
             # reply_segments 应通过 += 追加到 msg
@@ -779,7 +756,7 @@ class TestTextResponseWithExtraSegments:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(response="Hi", meme=None)
+            resp = TextResponse(responses=["Hi"], meme=None)
             await resp._perform_send(deps, extra_segments=mock_extra)
 
             mock_msg.__iadd__.assert_any_call(mock_extra)

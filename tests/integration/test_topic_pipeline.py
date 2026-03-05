@@ -20,9 +20,12 @@ from nonebot_plugin_wtfllm.topic._types import (
 )
 from nonebot_plugin_wtfllm.topic.clustering.engine import TopicClustering
 from nonebot_plugin_wtfllm.topic.clustering.mmr import mmr_select
-from nonebot_plugin_wtfllm.topic.clustering.vectorizer import TopicVectorizer
+from nonebot_plugin_wtfllm.topic.clustering.vectorizer import TopicVectorizer, vectorizer
 from nonebot_plugin_wtfllm.topic.manager import TopicManager
 from nonebot_plugin_wtfllm.v_db.models.topic_archive import TopicArchivePayload
+
+
+TOPIC_DIM = vectorizer.transform("dim_probe").shape[1]
 
 
 # ── helpers ──────────────────────────────────────────────
@@ -77,7 +80,7 @@ class TestIngestToArchivePipeline:
             candidate = collected[0]
             assert candidate.session_key.agent_id == "a1"
             assert candidate.session_key.group_id == "g1"
-            assert candidate.centroid.shape[-1] == 512
+            assert candidate.centroid.shape[-1] == TOPIC_DIM
         else:
             # 如果模型恰好把第 4 条归入已有簇则无淘汰，跳过
             ctx = manager._sessions.get("a1:g:g1")
@@ -97,7 +100,6 @@ class TestIngestToArchivePipeline:
             cluster_threshold=0.5,
             max_clusters=30,
             decay_seconds=0.01,         # 极短衰减确保快速过期
-            maintenance_interval=5,     # 每 5 条触发维护
             min_archive_messages=1,
         )
         manager.start(_fake_handler)
@@ -110,8 +112,9 @@ class TestIngestToArchivePipeline:
         # 等待过期
         await asyncio.sleep(0.05)
 
-        # 第 5 条触发 maintenance (total=5, interval=5)
+        # 第 5 条后等待周期清理 worker
         await manager.ingest("a1", "g1", None, "msg_4", "技术编程话题完全不同")
+        await asyncio.sleep(0.05)
 
         await manager._archive_queue.join()
         await manager.stop()
@@ -131,7 +134,7 @@ class TestArchiveClusterPipeline:
             for i in range(5)
         ]
 
-        centroid = np.random.randn(512).astype(np.float32)
+        centroid = np.random.randn(TOPIC_DIM).astype(np.float32)
         centroid /= np.linalg.norm(centroid)
 
         candidate = ArchivalCandidate(
@@ -188,7 +191,7 @@ class TestArchiveClusterPipeline:
                 message_entries=[("msg_0", time.time())],
                 message_count=1,
             ),
-            centroid=np.random.randn(512).astype(np.float32),
+            centroid=np.random.randn(TOPIC_DIM).astype(np.float32),
         )
 
         with (
@@ -224,7 +227,7 @@ class TestArchiveClusterPipeline:
                 message_entries=[],
                 message_count=0,
             ),
-            centroid=np.random.randn(512).astype(np.float32),
+            centroid=np.random.randn(TOPIC_DIM).astype(np.float32),
         )
 
         with patch(
@@ -246,7 +249,7 @@ class TestMMRSelection:
         """MMR 应选出既相关又多样的代表"""
         rng = np.random.default_rng(42)
         # 5 个候选 + 1 个查询中心
-        candidates = rng.standard_normal((5, 512)).astype(np.float32)
+        candidates = rng.standard_normal((5, TOPIC_DIM)).astype(np.float32)
         # L2 归一化
         norms = np.linalg.norm(candidates, axis=1, keepdims=True)
         candidates = candidates / norms
@@ -259,16 +262,16 @@ class TestMMRSelection:
 
     def test_mmr_respects_k_limit(self):
         """k > N 时返回所有"""
-        candidates = np.eye(3, 512, dtype=np.float32)
-        query = np.ones(512, dtype=np.float32)
+        candidates = np.eye(3, TOPIC_DIM, dtype=np.float32)
+        query = np.ones(TOPIC_DIM, dtype=np.float32)
         query /= np.linalg.norm(query)
         selected = mmr_select(candidates, query, k=10)
         assert len(selected) == 3
 
     def test_mmr_empty_input(self):
         """空候选返回空列表"""
-        candidates = np.zeros((0, 512), dtype=np.float32)
-        query = np.ones(512, dtype=np.float32)
+        candidates = np.zeros((0, TOPIC_DIM), dtype=np.float32)
+        query = np.ones(TOPIC_DIM, dtype=np.float32)
         selected = mmr_select(candidates, query, k=3)
         assert selected == []
 
@@ -292,7 +295,7 @@ class TestClusteringToCandidate:
         # 填满 2 个簇
         for i in range(2):
             clustering.assign(
-                self._make_vec(512, i), state=state, session_key=key, now=100.0 + i
+                self._make_vec(TOPIC_DIM, i), state=state, session_key=key, now=100.0 + i
             )
             state.clusters[i] = TopicCluster(
                 label=i, message_count=15, last_active_at=100.0 + i
@@ -300,7 +303,7 @@ class TestClusteringToCandidate:
 
         # 第 3 个触发淘汰
         label, candidate = clustering.assign(
-            self._make_vec(512, 2),
+            self._make_vec(TOPIC_DIM, 2),
             state=state,
             session_key=key,
             min_archive_messages=3,
@@ -308,7 +311,7 @@ class TestClusteringToCandidate:
         )
 
         assert candidate is not None
-        assert candidate.centroid.shape[-1] == 512
+        assert candidate.centroid.shape[-1] == TOPIC_DIM
         assert candidate.cluster.message_count == 15
         assert candidate.session_key == key
 
@@ -321,7 +324,7 @@ class TestClusteringToCandidate:
         state = TopicSessionState(session_key=key)
 
         clustering.assign(
-            self._make_vec(512, 0), state=state, session_key=key, now=0.0
+            self._make_vec(TOPIC_DIM, 0), state=state, session_key=key, now=0.0
         )
 
         # 模拟过期且消息充足的簇
@@ -346,7 +349,7 @@ class TestClusteringToCandidate:
         state = TopicSessionState(session_key=key)
 
         clustering.assign(
-            self._make_vec(512, 0), state=state, session_key=key, now=0.0
+            self._make_vec(TOPIC_DIM, 0), state=state, session_key=key, now=0.0
         )
 
         stale = TopicCluster(label=0, message_count=2)
@@ -395,7 +398,7 @@ class TestTopicManagerWorkerLifecycle:
         fake_candidate = ArchivalCandidate(
             session_key=SessionKey(agent_id="a1", group_id="g1"),
             cluster=TopicCluster(label=0, message_count=5),
-            centroid=np.zeros(512),
+            centroid=np.zeros(TOPIC_DIM),
         )
         manager._archive_queue.put_nowait(fake_candidate)
 
@@ -423,7 +426,7 @@ class TestTopicManagerWorkerLifecycle:
         fake = ArchivalCandidate(
             session_key=SessionKey(agent_id="a1", group_id="g1"),
             cluster=TopicCluster(label=0, message_count=5),
-            centroid=np.zeros(512),
+            centroid=np.zeros(TOPIC_DIM),
         )
         # 发送两个候选
         manager._archive_queue.put_nowait(fake)
@@ -476,11 +479,11 @@ class TestVectorizerIntegration:
     """验证 TopicVectorizer 在管线中的集成。"""
 
     def test_transform_output_shape_and_norm(self):
-        """transform 输出应为 1×512 的 L2 归一化向量"""
+        """transform 输出应为 1×D 的 L2 归一化向量"""
         from nonebot_plugin_wtfllm.topic.clustering.vectorizer import vectorizer
 
         vec = vectorizer.transform("测试文本")
-        assert vec.shape == (1, 512)
+        assert vec.shape == (1, TOPIC_DIM)
         norm = float(np.linalg.norm(vec))
         assert abs(norm - 1.0) < 1e-5
 
@@ -493,7 +496,7 @@ class TestVectorizerIntegration:
         single_0 = vectorizer.transform(texts[0])
         single_1 = vectorizer.transform(texts[1])
 
-        assert batch.shape == (2, 512)
+        assert batch.shape == (2, TOPIC_DIM)
         np.testing.assert_allclose(batch[0], single_0.flatten(), atol=1e-5)
         np.testing.assert_allclose(batch[1], single_1.flatten(), atol=1e-5)
 

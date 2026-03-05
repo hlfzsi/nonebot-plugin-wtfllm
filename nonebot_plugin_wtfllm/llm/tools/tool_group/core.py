@@ -125,12 +125,11 @@ async def update_self_identify(ctx: Context, new_identify: Dict[str, Any]) -> st
     return f"自我认知已进化。最新的自我认知: {await identification.get_all_json()}"
 
 
-@core_group.tool(cost=2)
+@core_group.tool(cost=1)
 async def get_image_description(ctx: Context, media_refs: List[str]) -> str | None:
     """
-    获取图片描述信息
-    应当优先调用本工具来获得图片信息
-    注意：参数必须完全匹配用户消息中 [IMG:n] 括号内的编号。
+    获取图片描述信息, 可能不精准
+    
 
     Args:
         media_refs (List[str]): 多媒体文件的引用序号, 如 ["IMG:1", "IMG:2"]
@@ -253,7 +252,7 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
 async def get_image_content(ctx: Context, media_refs: List[str]) -> ToolReturn:
     """
     通过多媒体文件的引用序号获取多媒体资源 仅支持图片, 返回顺序与输入顺序一致
-    当图片描述无法满足需求或无法获取描述, 需要直接获取图片内容进行分析时调用。
+    需要直接获取图片内容进行分析时调用。
 
         Args:
             media_refs (List[str]): 多媒体文件的引用序号, 如 ["IMG:1", "IMG:2"]
@@ -332,10 +331,16 @@ async def get_full_message_detail(ctx: Context, message_ref: int) -> str:
     if not item:
         return f"未找到消息ID {message_ref} 的相关信息。"
 
-    llm_ctx = ctx.deps.context.ctx.copy()
+    items = await memory_item_repo.get_chain_by_message_ids([item.message_id])
+    stream = MemoryItemStream.create(
+        items=items, prefix="<message_detail>", suffix="</message_detail>"
+    )
+
+    llm_ctx = ctx.deps.context.ctx.copy(share_providers=True)
     llm_ctx.set_condense(False)
-    result = item.content.to_llm_context(llm_ctx, item.message_id, message_ref)
-    return result
+    new_builder = ctx.deps.context.copy(share_context=llm_ctx, empty=True)
+    new_builder.add(stream)
+    return new_builder.to_prompt()
 
 
 @core_group.tool(cost=1)

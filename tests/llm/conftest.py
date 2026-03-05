@@ -43,15 +43,21 @@ _register_bare_package(
     _SRC_DIR / "llm" / "tools" / "tool_group",
 )
 
+# --- 将 services 及 func 注册为裸包，允许导入 memory_retrieval 等子模块 ---
+_register_bare_package(
+    "nonebot_plugin_wtfllm.services", _SRC_DIR / "services"
+)
+_register_bare_package(
+    "nonebot_plugin_wtfllm.services.func", _SRC_DIR / "services" / "func"
+)
+
 # --- 预注入 services mock（打断循环的回边）---
 _services_mock = MagicMock()
 for mod_name in [
-    "nonebot_plugin_wtfllm.services",
     "nonebot_plugin_wtfllm.services.agent",
     "nonebot_plugin_wtfllm.services.store",
     "nonebot_plugin_wtfllm.services.summary",
     "nonebot_plugin_wtfllm.services.easy_ban",
-    "nonebot_plugin_wtfllm.services.func",
     "nonebot_plugin_wtfllm.services.func.easy_ban",
     "nonebot_plugin_wtfllm.services.func.agent_cache",
 ]:

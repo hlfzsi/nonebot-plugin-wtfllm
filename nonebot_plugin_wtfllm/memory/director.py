@@ -165,25 +165,36 @@ class MemoryContextBuilder:
         return next((s for s in self._sources if s.role == role), None)
 
     def copy(
-        self, share_context: bool = True, empty: bool = False
+        self,
+        share_context: bool | LLMContext = True,
+        empty: bool = False,
     ) -> "MemoryContextBuilder":
         """创建当前构建器的副本
 
         Args:
-            share_context (bool, optional): 是否共享上下文. 默认为 True.
+            share_context (bool, LLMContext , optional): 是否共享上下文. 默认为 True. 也可以直接传入一个 LLMContext 实例来共享.
             empty (bool, optional): 是否创建一个空的构建器. 默认为 False.
         """
+        if share_context is True:
+            ctx = self.ctx
+            agent_ids = self.agent_ids
+            custom_ref = None
+        elif isinstance(share_context, LLMContext):
+            ctx = share_context
+            agent_ids = self.agent_ids
+            custom_ref = None
+        else:
+            ctx = self.ctx.copy(share_providers=False)
+            agent_ids = self.agent_ids.copy() if self.agent_ids else None
+            custom_ref = self.ctx.alias_provider.alias_map.copy()
+
+        sources = [] if empty else self._sources.copy()
+
         return MemoryContextBuilder(
-            ctx=self.ctx if share_context else self.ctx.copy(share_providers=False),
-            sources=self._sources.copy() if not empty else [],
-            agent_id=self.agent_ids
-            if share_context
-            else self.agent_ids.copy()
-            if self.agent_ids
-            else None,
-            custom_ref=None
-            if share_context
-            else self.ctx.alias_provider.alias_map.copy(),
+            ctx=ctx,
+            sources=sources,
+            agent_id=agent_ids,
+            custom_ref=custom_ref,
         )
 
     def __add__(self, other: "MemorySource") -> "MemoryContextBuilder":
