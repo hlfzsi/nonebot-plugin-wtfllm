@@ -12,6 +12,8 @@ _让 Agent 记得人、记得事、记得语境，并且成本可控_
 
 **nonebot-plugin-wtfllm** 是一个面向 NoneBot2 的 Agent 插件。它为你的 Bot 提供多层记忆、多模态理解、工具自主调度等能力——开箱即用，配置即走。
 
+_DeepSeek官方API，单次请求不超过5k输入token；同一会话连续请求缓存命中率达95%_
+
 ## 为什么是 WtfLLM
 
 整个项目的缘起是一台挂机宝。
@@ -76,9 +78,9 @@ plugins = ["nonebot_plugin_wtfllm"]
 
 在 NoneBot2 的 `.env` 文件中配置以下项目：
 
-有点多，但真正要关注的只有**必填配置**和可选配置中的**独立模型**。
+配置项较多，最关键的是**必填配置**与按需启用的**独立模型**配置。
 
-提醒，本项目的模型应当全部使用**OpenAI**接口。
+本项目的模型接口均按 OpenAI 兼容格式调用。
 
 ### 必填配置
 
@@ -106,12 +108,12 @@ plugins = ["nonebot_plugin_wtfllm"]
 
 | 配置项                       | 类型    | 默认值 | 说明                                             |
 | ---------------------------- | ------- | ------ | ------------------------------------------------ |
-| `short_memory_max_count`     | `int`   | `15`   | 默认注入的短期记忆最大条数，与时间窗口取交集     |
-| `core_memory_max_tokens`     | `int`   | `2048` | 单个会话核心记忆最大 token 数，超过后自动压缩    |
-| `core_memory_compress_ratio` | `float` | `0.6`  | 核心记忆压缩目标比例                             |
+| `short_memory_max_count`     | `int`   | `10`   | 默认注入的短期记忆最大条数，与时间窗口取交集     |
+| `core_memory_max_tokens`     | `int`   | `512`  | 单个会话核心记忆最大 token 数，超过后自动压缩    |
+| `core_memory_compress_ratio` | `float` | `0.2`  | 核心记忆压缩目标比例                             |
 | `memory_item_max_chars`      | `int`   | `60`   | 单条记忆文本最大字符数，超过时取头尾各半压缩展示 |
 | `knowledge_base_max_results` | `int`   | `5`    | 知识库最大检索结果数                             |
-| `knowledge_base_max_tokens`  | `int`   | `1024` | 知识库在 prompt 中的最大 token 数                |
+| `knowledge_base_max_tokens`  | `int`   | `256`  | 知识库在 prompt 中的最大 token 数                |
 
 ### 可选配置 — Agent 行为
 
@@ -119,9 +121,22 @@ plugins = ["nonebot_plugin_wtfllm"]
 | 配置项                       | 类型  | 默认值 | 说明                       |
 | ---------------------------- | ----- | ------ | -------------------------- |
 | `agent_base_timeout_seconds` | `int` | `45`   | Agent 基础超时（秒）       |
-| `tool_point_budget`          | `int` | `5`    | 工具点数预算，`0` 为不限制 |
+| `tool_point_budget`          | `int` | `3`    | 工具点数预算，`0` 为不限制 |
 | `message_track_time_minutes` | `int` | `120`  | 消息追踪窗口（分钟）       |
 | `tool_call_record_max_count` | `int` | `1`    | 注入的工具调用记录数量     |
+
+### 可选配置 — 话题系统（Topic）
+
+
+| 配置项                       | 类型    | 默认值 | 说明                               |
+| ---------------------------- | ------- | ------ | ---------------------------------- |
+| `topic_cluster_threshold`    | `float` | `0.70` | 话题聚类余弦相似度阈值             |
+| `topic_max_clusters`         | `int`   | `15`   | 每个会话最大活跃话题数             |
+| `topic_decay_minutes`        | `int`   | `30`   | 话题不活跃超过此时间后清理（分钟） |
+| `topic_max_context_messages` | `int`   | `5`    | 话题上下文检索最大消息数           |
+| `topic_archive_min_messages` | `int`   | `5`    | 簇消息数达到该值才归档到长期记忆   |
+| `topic_archive_mmr_k`        | `int`   | `5`    | MMR 选取代表消息条数               |
+| `topic_archive_mmr_lambda`   | `float` | `0.5`  | MMR relevance-diversity 权衡系数   |
 
 ### 可选配置 — 独立模型
 
@@ -147,6 +162,23 @@ plugins = ["nonebot_plugin_wtfllm"]
 | `embedding_model_name`   | `str`           | `"BAAI/bge-small-zh-v1.5"` | 向量嵌入模型                                              |
 | `sparse_model_name`      | `str`           | `"Qdrant/bm25"`            | 稀疏向量模型                                              |
 | `huggingface_mirror_url` | `str`           | `"https://hf-mirror.com"`  | HuggingFace 镜像                                          |
+
+### 配置示例
+
+```env
+llm_api_key="YOUR_API_KEY"
+llm_api_base_url="https://api.openai.com/v1"
+llm_model_name="gpt-4o-mini"
+
+bot_name="小W"
+tool_point_budget=3
+short_memory_max_count=10
+
+# 可选：启用视觉模型
+vision_model_name="gpt-4.1-mini"
+vision_model_base_url="https://api.openai.com/v1"
+vision_api_key="YOUR_API_KEY"
+```
 
 ## 使用
 
@@ -186,7 +218,7 @@ plugins = ["nonebot_plugin_wtfllm"]
 | **ImageGeneration** | 文生图、图生图、多图合成                             |      3 | 4 pt     | 需配置图像生成模型 |
 | **ScheduleMessage** | 定时消息、定时 Agent 任务创建与管理                  |      4 | 0-3 pt   | 常驻               |
 
-> **工具点数预算**：每轮对话有 `tool_point_budget`（默认 5）个点数。Agent 每调用一个工具就扣除对应 pt；当预算不足时会收到警告并尽快给出最终回复。设为 `0` 可关闭预算限制。
+> **工具点数预算**：每轮对话有 `tool_point_budget`（默认 3）个点数。Agent 每调用一个工具就扣除对应 pt；当预算不足时会收到警告并尽快给出最终回复。设为 `0` 可关闭预算限制。
 
 由于不确定有没有人会基于本插件二次开发，当前尚未开放自定义工具的接口，如有需要欢迎在 Issue 中提出。
 
