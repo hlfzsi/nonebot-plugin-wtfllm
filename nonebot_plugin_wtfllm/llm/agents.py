@@ -1,4 +1,8 @@
-__all__ = ["CHAT_AGENT"]
+__all__ = [
+    "CHAT_AGENT",
+    "register_tool_groups",
+    "get_registered_group_names",
+]
 
 import asyncio
 import textwrap
@@ -27,6 +31,7 @@ from .tools import (
     schedule_message_group,
     knowledge_base_group,
 )
+from .tools.tool_group.base import ToolGroupMeta
 from .response_models import CHAT_OUTPUT
 from ..utils import APP_CONFIG, logger, count_tokens
 # from ..abilities import identification
@@ -78,6 +83,29 @@ CHAT_AGENT = Agent(
 
 
 register_tools_to_agent(CHAT_AGENT, chat_agent_tools)
+_registered_group_names: set[str] = {g.name for g in chat_agent_tools}
+
+
+def register_tool_groups(groups: list[ToolGroupMeta]) -> list[str]:
+    """将工具组注册到 CHAT_AGENT，已注册的组会被跳过。
+
+    Returns:
+        实际新注册的组名列表。
+    """
+    newly_registered: list[str] = []
+    pending = [g for g in groups if g.name not in _registered_group_names]
+    if not pending:
+        return newly_registered
+    register_tools_to_agent(CHAT_AGENT, pending)
+    for g in pending:
+        _registered_group_names.add(g.name)
+        newly_registered.append(g.name)
+    return newly_registered
+
+
+def get_registered_group_names() -> frozenset[str]:
+    """返回当前已注册到 CHAT_AGENT 的工具组名称"""
+    return frozenset(_registered_group_names)
 
 
 @CHAT_AGENT.system_prompt

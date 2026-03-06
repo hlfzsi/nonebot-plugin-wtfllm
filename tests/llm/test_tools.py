@@ -470,7 +470,6 @@ from nonebot_plugin_wtfllm.llm.tools.tool_group.core import (
     reinforce_persona_anchor as _reinforce_persona_anchor_wrapped,
     activate_tool_group as _activate_tool_group_wrapped,
     mark_point_of_interest as _mark_point_of_interest_wrapped,
-    update_self_identify as _update_self_identify_wrapped,
     query_tool_call_history as _query_tool_call_history_wrapped,
     get_full_message_detail as _get_full_message_detail_wrapped,
     query_memory as _query_memory_wrapped,
@@ -479,7 +478,6 @@ from nonebot_plugin_wtfllm.llm.tools.tool_group.core import (
 _reinforce_persona_anchor = _reinforce_persona_anchor_wrapped.__wrapped__
 _activate_tool_group = _activate_tool_group_wrapped.__wrapped__
 _mark_point_of_interest = _mark_point_of_interest_wrapped.__wrapped__
-_update_self_identify = _update_self_identify_wrapped.__wrapped__
 _query_tool_call_history = _query_tool_call_history_wrapped.__wrapped__
 _get_full_message_detail = _get_full_message_detail_wrapped.__wrapped__
 _query_memory = _query_memory_wrapped.__wrapped__
@@ -614,39 +612,6 @@ class TestMarkPointOfInterest:
         )
         poi_arg = mock_router.mark_poi.call_args[0][0]
         assert poi_arg.turns == 5
-
-
-# ===================== update_self_identify 测试 =====================
-
-
-class TestUpdateSelfIdentify:
-    """update_self_identify 工具测试"""
-
-    @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.identification")
-    async def test_update_call_and_return(self, mock_identification):
-        mock_identification.update = AsyncMock()
-        mock_identification.get_all_json = AsyncMock(
-            return_value='{"name": "test_bot"}'
-        )
-        ctx = _make_context()
-        new_data = {"name": "test_bot"}
-        result = await _update_self_identify(ctx, new_data)
-
-        mock_identification.update.assert_called_once_with(new_data)
-        assert "自我认知已进化" in result
-        assert '{"name": "test_bot"}' in result
-
-    @pytest.mark.asyncio
-    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.identification")
-    async def test_update_with_empty_dict(self, mock_identification):
-        mock_identification.update = AsyncMock()
-        mock_identification.get_all_json = AsyncMock(return_value="{}")
-        ctx = _make_context()
-        result = await _update_self_identify(ctx, {})
-
-        mock_identification.update.assert_called_once_with({})
-        assert "自我认知已进化" in result
 
 
 # ===================== query_tool_call_history 测试 =====================
