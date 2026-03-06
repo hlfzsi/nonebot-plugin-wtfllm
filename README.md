@@ -42,13 +42,10 @@ WtfLLM 经历过不少阶段。
 
 ## 安装
 
-> [!NOTE]
-> 本插件尚未发布至 PyPI，目前请通过源码安装。
+### 方式一：通过pip安装
 
 ```bash
-git clone https://github.com/hlfzsi/nonebot-plugin-wtfllm.git
-cd nonebot-plugin-wtfllm
-pip install .
+pip install nonebot_plugin_wtfllm
 ```
 
 在 NoneBot2 的 `pyproject.toml` 中加载插件：
@@ -57,6 +54,13 @@ pip install .
 [tool.nonebot]
 plugins = ["nonebot_plugin_wtfllm"]
 ```
+
+### 方式二：通过nb-cli安装
+
+```bash
+nb plugin install nonebot_plugin_wtfllm
+```
+
 
 向量数据库使用 Qdrant，已内置**自动部署**，首次启动时会自动下载嵌入模型。
 

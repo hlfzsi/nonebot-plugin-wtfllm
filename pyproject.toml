@@ -1,7 +1,7 @@
 [project]
 name = "nonebot_plugin_wtfllm"
 version = "0.0.1rc1"
-description = "nonebot_plugin_wtfllm"
+description = "让 Agent 记得人、记得事、记得语境，并且成本可控"
 readme = "README.md"
 requires-python = ">=3.11, <4.0"
 dependencies = [
