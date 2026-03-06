@@ -17,7 +17,7 @@ import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
-_SRC_DIR = Path(__file__).parent.parent.parent / "nonebot_plugin_wtfllm"
+_SRC_DIR = Path(__file__).parent.parent.parent / "src" / "nonebot_plugin_wtfllm"
 
 
 def _register_bare_package(dotted_name: str, directory: Path):

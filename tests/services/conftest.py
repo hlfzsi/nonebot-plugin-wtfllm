@@ -11,7 +11,7 @@ import types
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
 
-_SRC_DIR = Path(__file__).parent.parent.parent / "nonebot_plugin_wtfllm"
+_SRC_DIR = Path(__file__).parent.parent.parent / "src" / "nonebot_plugin_wtfllm"
 
 # easy_ban.py / summary.py / delete_media.py 从 arclet.alconna 导入
 if "arclet.alconna" not in sys.modules:

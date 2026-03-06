@@ -18,7 +18,7 @@ import pytest
 
 # 将项目源码目录添加到 sys.path
 _PROJECT_ROOT = Path(__file__).parent.parent
-_SRC_DIR = _PROJECT_ROOT / "nonebot_plugin_wtfllm"
+_SRC_DIR = _PROJECT_ROOT / "src" / "nonebot_plugin_wtfllm"
 
 # 创建临时目录用于测试
 _temp_dir = tempfile.mkdtemp()

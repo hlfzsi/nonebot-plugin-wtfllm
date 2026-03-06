@@ -51,7 +51,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["nonebot_plugin_wtfllm"]
+pythonpath = ["src"] 
 addopts = "--cov=nonebot_plugin_wtfllm --cov-report=term-missing"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -79,7 +79,8 @@ exclude_lines = [
 
 [tool.coverage.run]
 branch = true
-source = ["nonebot_plugin_wtfllm"]
+source = ["src/nonebot_plugin_wtfllm"]
 
-[tool.setuptools.package-data]
-nonebot_plugin_wtfllm = ["resources/**/*"]
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
