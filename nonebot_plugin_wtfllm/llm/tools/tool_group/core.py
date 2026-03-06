@@ -17,7 +17,7 @@ from ....services.func.memory_retrieval import RetrievalChain
 from ....abilities import (
     attention_router,
     PoiInfo,
-    identification,
+    # identification,
     get_image_desc as _get_image_desc,
 )
 
@@ -110,26 +110,26 @@ def mark_point_of_interest(
     return f"已为用户 '{user_id}' 标记关注点，原因：{reason}"
 
 
-@core_group.tool(cost=0)
-async def update_self_identify(ctx: Context, new_identify: Dict[str, Any]) -> str:
-    """
-    更新你的核心身份与人设特质。当你想根据交互经验进行自我进化、调整性格、
-    记录长期记忆、保持行为一致或修正行为准则时，请积极调用此工具。
-    警告: 这是全局性更新, 若针对个人和单独某一用户, 请使用其他工具
-    支持深度增量合并，将字段设为 null 可将其从你的人设中删除。
-
-    Args:
-        new_identify: 增量更新的字典数据。
-    """
-    await identification.update(new_identify)
-    return f"自我认知已进化。最新的自我认知: {await identification.get_all_json()}"
+# @core_group.tool(cost=0)
+# async def update_self_identify(ctx: Context, new_identify: Dict[str, Any]) -> str:
+#    """
+#    更新你的核心身份与人设特质。当你想根据交互经验进行自我进化、调整性格、
+#    记录长期记忆、保持行为一致或修正行为准则时，请积极调用此工具。
+#    警告: 这是全局性更新, 若针对个人和单独某一用户, 请使用其他工具
+#    支持深度增量合并，将字段设为 null 可将其从你的人设中删除。
+#
+#    Args:
+#        new_identify: 增量更新的字典数据。
+#    """
+#    await identification.update(new_identify)
+#    return f"自我认知已进化。最新的自我认知: {await identification.get_all_json()}"
 
 
 @core_group.tool(cost=1)
 async def get_image_description(ctx: Context, media_refs: List[str]) -> str | None:
     """
     获取图片描述信息, 可能不精准
-    
+
 
     Args:
         media_refs (List[str]): 多媒体文件的引用序号, 如 ["IMG:1", "IMG:2"]

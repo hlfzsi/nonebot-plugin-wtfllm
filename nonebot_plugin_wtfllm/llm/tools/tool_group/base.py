@@ -126,7 +126,7 @@ class ToolGroupMeta(BaseModel):
         ToolGroupMeta.mapping[self.name] = self
 
     def resolve_tool_cost(self, tool_name: str) -> int:
-        """解析工具点数消耗，优先级：tool_costs > default_tool_cost > 全局默认"""
+        """解析工具点数消耗，优先级：tool_costs > default_tool_cost"""
         if tool_name in self.tool_costs:
             return self.tool_costs[tool_name]
         if self.default_tool_cost >= 0:

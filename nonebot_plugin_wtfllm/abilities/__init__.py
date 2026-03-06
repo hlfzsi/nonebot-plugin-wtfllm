@@ -3,7 +3,7 @@ __all__ = [
     "PoiInfo",
     "text_to_image",
     "get_image_desc",
-    "identification",
+    # "identification",
     "modify_image_with_text",
     "combine_images",
     "ENABLE_IMAGE_GENERATION",
@@ -11,7 +11,8 @@ __all__ = [
 ]
 
 from .poi import AttentionRouter, PoiInfo
-from .self_identification import LLMPersonaEvolution
+
+# from .self_identification import LLMPersonaEvolution
 from .image_generation import (
     ENABLE_IMAGE_GENERATION,
     text_to_image,
@@ -20,8 +21,8 @@ from .image_generation import (
 )
 from .vision import get_image_desc
 from .core_memory_compressor import schedule_compress
-from ..utils import JSON_DIR
+# from ..utils import JSON_DIR
 
 
 attention_router = AttentionRouter()
-identification = LLMPersonaEvolution(storage_path=JSON_DIR)
+# identification = LLMPersonaEvolution(storage_path=JSON_DIR)
