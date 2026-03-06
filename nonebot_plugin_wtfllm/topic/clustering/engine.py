@@ -18,11 +18,13 @@ class TopicClustering:
         threshold: float = 0.65,
         max_clusters: int = 30,
         decay_seconds: float = 7200,
+        ema_alpha: float = 0.5,
     ) -> None:
         self._threshold = threshold
         self._max_clusters = max_clusters
         self.decay_seconds = decay_seconds
         self._decay_half_life: float = decay_seconds / 4.0
+        self._ema_alpha = ema_alpha
         self._centroids: dict[int, NDArray[np.floating]] = {}
         self._counts: dict[int, int] = {}
         self._last_active: dict[int, float] = {}
@@ -98,6 +100,7 @@ class TopicClustering:
                         )
                     )
                 pruned.append(label)
+                state.remove_cluster_index(label)
                 del state.clusters[label]
                 self._centroids.pop(label, None)
                 self._counts.pop(label, None)
@@ -138,8 +141,24 @@ class TopicClustering:
         del self._centroids[weakest]
         del self._counts[weakest]
         del self._last_active[weakest]
+        state.remove_cluster_index(weakest)
         state.clusters.pop(weakest, None)
         return candidate
+
+    def update_centroid_external(
+        self,
+        label: int,
+        feature_vector: NDArray[np.floating],
+        now: float | None = None,
+    ) -> None:
+        """更新已有簇的质心"""
+        if label not in self._centroids:
+            return
+        if now is None:
+            now = time.time()
+        vec = feature_vector.flatten()
+        self._update_centroid(label, vec)
+        self._last_active[label] = now
 
     def _find_nearest(self, vec: NDArray[np.floating]) -> tuple[int, float]:
         """找到与 vec 余弦相似度最高的质心"""
@@ -161,12 +180,8 @@ class TopicClustering:
         return label
 
     def _update_centroid(self, label: int, vec: NDArray[np.floating]) -> None:
-        """增量更新质心：加权平均后重新 L2 归一化。
-
-        权重上限为 _CENTROID_WEIGHT_CAP，防止大簇质心僵化。
-        """
-        effective_count = min(self._counts[label], self._CENTROID_WEIGHT_CAP)
-        raw = self._centroids[label] * effective_count + vec
+        """EMA：偏向最近消息以追踪话题连续性。"""
+        raw = self._ema_alpha * vec + (1.0 - self._ema_alpha) * self._centroids[label]
         norm = np.linalg.norm(raw)
         if norm > 0:
             raw /= norm

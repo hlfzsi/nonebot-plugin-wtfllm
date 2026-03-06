@@ -74,6 +74,7 @@ async def store_message_with_context(
                 user_id=resolved_user_id,
                 message_id=msg_id,
                 plain_text=plain_text,
+                related_message_id=item.related_message_id,
             )
 
     return item

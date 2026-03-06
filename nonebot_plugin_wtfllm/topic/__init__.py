@@ -15,4 +15,5 @@ topic_manager = TopicManager(
     max_clusters=APP_CONFIG.topic_max_clusters,
     decay_seconds=APP_CONFIG.topic_decay_minutes * 60,
     min_archive_messages=APP_CONFIG.topic_archive_min_messages,
+    centroid_ema_alpha=APP_CONFIG.topic_centroid_ema_alpha,
 )

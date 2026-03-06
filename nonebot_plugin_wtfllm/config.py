@@ -207,6 +207,10 @@ class Config(BaseModel):
         default=0.5,
         description="MMR relevance-diversity权衡系数",
     )
+    topic_centroid_ema_alpha: float = Field(
+        default=0.5,
+        description="质心EMA更新系数，越大越偏向最新消息 (0.3-0.7)",
+    )
 
     def model_post_init(self, __context):
         if self.huggingface_mirror_url:

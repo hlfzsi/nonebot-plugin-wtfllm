@@ -34,6 +34,7 @@ class TopicManager:
         decay_seconds: float = 7200,
         max_messages_per_cluster: int = 200,
         min_archive_messages: int = 10,
+        centroid_ema_alpha: float = 0.5,
     ) -> None:
         self._sessions: LRUCache[str, _SessionContext] = LRUCache(maxsize=maxsize)
         self._lock = asyncio.Lock()
@@ -43,6 +44,7 @@ class TopicManager:
         self._decay_seconds = decay_seconds
         self._max_messages_per_cluster = max_messages_per_cluster
         self._min_archive_messages = min_archive_messages
+        self._centroid_ema_alpha = centroid_ema_alpha
 
         self._archive_queue: asyncio.Queue[ArchivalCandidate] = asyncio.Queue()
         self._archive_worker: asyncio.Task[None] | None = None
@@ -123,6 +125,7 @@ class TopicManager:
                     threshold=self._cluster_threshold,
                     max_clusters=self._max_clusters,
                     decay_seconds=self._decay_seconds,
+                    ema_alpha=self._centroid_ema_alpha,
                 ),
             )
             self._sessions[cache_key] = ctx
@@ -135,8 +138,12 @@ class TopicManager:
         user_id: str | None,
         message_id: str,
         plain_text: str,
+        related_message_id: str | None = None,
     ) -> int:
-        """摄入新消息到话题系统，返回分配的簇标签。"""
+        """摄入新消息到话题系统，返回分配的簇标签。
+
+        若 related_message_id 对应的消息已在某个簇中，则继承该簇。
+        """
         if not plain_text or len(plain_text.strip()) <= 2:
             return -1
 
@@ -148,17 +155,30 @@ class TopicManager:
             state = ctx.state
             now = time.time()
 
+            inherited_label: int | None = None
+            if related_message_id is not None:
+                candidate_label = state.message_to_label.get(related_message_id)
+                if candidate_label is not None and candidate_label in state.clusters:
+                    inherited_label = candidate_label
+
             feature_vector = await asyncio.to_thread(
                 self._vectorizer.transform, plain_text
             )
 
-            label, eviction_candidate = ctx.clustering.assign(
-                feature_vector,
-                state=state,
-                session_key=key,
-                min_archive_messages=self._min_archive_messages,
-                now=now,
-            )
+            if inherited_label is not None:
+                label = inherited_label
+                eviction_candidate = None
+                ctx.clustering.update_centroid_external(
+                    label, feature_vector, now=now
+                )
+            else:
+                label, eviction_candidate = ctx.clustering.assign(
+                    feature_vector,
+                    state=state,
+                    session_key=key,
+                    min_archive_messages=self._min_archive_messages,
+                    now=now,
+                )
 
             if label not in state.clusters:
                 state.clusters[label] = TopicCluster(label=label)
@@ -173,6 +193,7 @@ class TopicManager:
                     -self._max_messages_per_cluster :
                 ]
 
+            state.message_to_label[message_id] = label
             state.total_messages_ingested += 1
 
             # 入队淘汰候选

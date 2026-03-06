@@ -53,6 +53,14 @@ class TopicSessionState:
     session_key: SessionKey
     clusters: dict[int, TopicCluster] = field(default_factory=dict)
     total_messages_ingested: int = 0
+    message_to_label: dict[str, int] = field(default_factory=dict)
+
+    def remove_cluster_index(self, label: int) -> None:
+        """清理指定簇在 message_to_label 中的全部条目"""
+        cluster = self.clusters.get(label)
+        if cluster:
+            for msg_id, _ in cluster.message_entries:
+                self.message_to_label.pop(msg_id, None)
 
 
 @dataclass(slots=True)
