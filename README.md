@@ -241,6 +241,12 @@ vision_api_key="YOUR_API_KEY"
 - [Pydantic AI](https://github.com/pydantic/pydantic-ai) — Agent 框架
 - [Qdrant](https://github.com/qdrant/qdrant) — 向量检索引擎
 
+## 第三方模型说明
+
+本项目随发行包附带用于话题聚类的静态嵌入模型 `m2v_bge_small_zh`。该模型基于 [Model2Vec](https://github.com/MinishLab/model2vec) 蒸馏自 [BAAI/bge-small-zh-v1.5](https://huggingface.co/BAAI/bge-small-zh-v1.5)，其配套模型说明文件位于 `src/nonebot_plugin_wtfllm/resources/m2v_bge_small_zh/README.md`。
+
+如将本项目或其中附带模型用于研究、发布或再分发，建议同时保留上述来源信息，并按照模型说明中的建议对 Model2Vec 项目进行引用。
+
 ## 许可证
 
 [AGPL-3.0](LICENSE)
