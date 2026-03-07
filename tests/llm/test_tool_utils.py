@@ -43,6 +43,13 @@ class TestBuildBudgetSuffix:
         deps = _make_deps(budget=0)
         assert build_budget_suffix(deps, cost=1) is None
 
+    def test_negative_cost_shows_added_points(self):
+        deps = _make_deps(budget=3, used=-2)
+        result = build_budget_suffix(deps, cost=-2)
+        assert result is not None
+        assert "+2pt" in result
+        assert "5/3" in result
+
     def test_high_ratio(self):
         deps = _make_deps(budget=100, used=10)
         result = build_budget_suffix(deps, cost=1)

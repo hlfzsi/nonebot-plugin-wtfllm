@@ -53,7 +53,9 @@ class TestBuildUniFromMentionsAndReply:
     @patch(f"{MODULE}.UniMessage")
     def test_with_mentions_resolves_aliases(self, MockUniMsg):
         ctx = _make_ctx()
-        ctx.deps.context.resolve_aliases = MagicMock(side_effect=lambda x: f"resolved_{x}")
+        ctx.deps.context.resolve_aliases = MagicMock(
+            side_effect=lambda x: f"resolved_{x}"
+        )
         mock_msg = MagicMock()
         MockUniMsg.return_value = mock_msg
 
@@ -133,11 +135,11 @@ class TestSend:
         mock_msg.send = AsyncMock(return_value=MagicMock())
         mock_build.return_value = mock_msg
 
-        await _send(ctx, message="hi", added_timeout=120.0)
+        await _send(ctx, message="hi")
         mock_resched.assert_called_once()
         # delay = min(4.0, max(0.0, len("hi") * 0.1)) = 0.2
         call_args = mock_resched.call_args
-        assert call_args[0][1] == pytest.approx(0.2 + 120.0, abs=0.1)
+        assert call_args[0][1] == pytest.approx(0.2 + 45.0, abs=0.1)
 
 
 # ===================== ask 测试 =====================
@@ -165,8 +167,13 @@ class TestAsk:
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_timeout_returns_no_reply(
-        self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_store, mock_stream,
+        self,
+        mock_build,
+        mock_waiter,
+        mock_resched,
+        mock_ensure,
+        mock_store,
+        mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -189,8 +196,13 @@ class TestAsk:
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_receives_reply_and_returns_prompt(
-        self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_store, mock_stream,
+        self,
+        mock_build,
+        mock_waiter,
+        mock_resched,
+        mock_ensure,
+        mock_store,
+        mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -220,8 +232,13 @@ class TestAsk:
     @patch(f"{MODULE}.waiter")
     @patch(f"{MODULE}.build_uni_from_metions_and_reply")
     async def test_reschedules_deadline(
-        self, mock_build, mock_waiter, mock_resched, mock_ensure,
-        mock_store, mock_stream,
+        self,
+        mock_build,
+        mock_waiter,
+        mock_resched,
+        mock_ensure,
+        mock_store,
+        mock_stream,
     ):
         ctx = _make_ctx()
         mock_msg = MagicMock()
@@ -232,5 +249,5 @@ class TestAsk:
         mock_wait_obj.wait = AsyncMock(return_value=None)
         mock_waiter.return_value = MagicMock(return_value=mock_wait_obj)
 
-        await _ask(ctx, question="q?", timeout=45.0, added_timeout=90.0)
-        mock_resched.assert_called_once_with(ctx, 45.0 + 90.0)
+        await _ask(ctx, question="q?", timeout=45.0)
+        mock_resched.assert_called_once_with(ctx, 45.0+45.0)

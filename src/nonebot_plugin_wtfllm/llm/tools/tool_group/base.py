@@ -129,9 +129,7 @@ class ToolGroupMeta(BaseModel):
         """解析工具点数消耗，优先级：tool_costs > default_tool_cost"""
         if tool_name in self.tool_costs:
             return self.tool_costs[tool_name]
-        if self.default_tool_cost >= 0:
-            return self.default_tool_cost
-        return 0
+        return self.default_tool_cost
 
     async def get_info(self, context: Context) -> str | None:
         if not await self.should_show(context):

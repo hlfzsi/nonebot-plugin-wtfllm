@@ -1,6 +1,7 @@
 __all__ = ["CHAT_OUTPUT"]
 
 from abc import ABC, abstractmethod
+import asyncio
 from typing import List, Tuple, Type
 
 from pydantic import BaseModel, Field
@@ -158,7 +159,9 @@ class TextResponse(SendableResponse):
     )
 
     responses: List[str] = Field(
-        ..., description="给用户的自然语言回复列表, 每个元素会被分割发送, 均为纯文本"
+        ...,
+        max_length=3,
+        description="给用户的自然语言回复列表, 每个元素会被分割发送, 均为纯文本, 不包含@等特殊格式",
     )
 
     meme: str | None = Field(
@@ -227,6 +230,8 @@ class TextResponse(SendableResponse):
 
             sent_message = await msg.send(target=context.nb_runtime.target)
             results.append((msg, sent_message, True))
+            if not is_last:
+                await asyncio.sleep(len(text) * 0.2)
 
         return results
 

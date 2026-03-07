@@ -12,6 +12,7 @@ def build_budget_suffix(deps: AgentDeps, cost: int) -> str | None:
         return None
     remaining = deps.tool_points_remaining
     ratio = deps.tool_budget_ratio
+    budget_delta = -cost
 
     if ratio >= 0.7:
         tier_hint = ""
@@ -20,7 +21,7 @@ def build_budget_suffix(deps: AgentDeps, cost: int) -> str | None:
     else:
         tier_hint = " 预算耗尽，立即给出最终回复。"
 
-    return f"\n[工具预算: -{cost}pt, 剩余 {remaining}/{deps.tool_point_budget}pt{tier_hint}]"
+    return f"\n[工具预算: {budget_delta:+d}pt, 剩余 {remaining}/{deps.tool_point_budget}pt{tier_hint}]"
 
 
 def append_budget_suffix(result: Any, suffix: str | None) -> Any:

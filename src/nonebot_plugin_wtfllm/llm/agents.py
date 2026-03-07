@@ -119,7 +119,7 @@ async def get_chat_prompt(ctx: Context) -> str:
 
     budget_section = ""
     if ctx.deps.tool_budget_enabled:
-        budget_section = f"Budget: {ctx.deps.tool_point_budget}pt. Tools consume pts as marked. Usage alerts provided."
+        budget_section = f"Budget: {ctx.deps.tool_point_budget}pt for THIS ROUND ONLY. Tools consume or gain pts as marked. Usage alerts provided."
 
     prompt_template = textwrap.dedent(f"""
 # Role

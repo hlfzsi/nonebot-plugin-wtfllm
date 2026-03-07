@@ -22,6 +22,7 @@ chat_tool_group = ToolGroupMeta(
         "用于在对话流程中主动与用户进行交互式沟通的工具组，"
         "支持发送中间思考/引导性消息（如‘让我想想…’）以及主动提问并等待用户回复，"
         "需要完成连续任务时调用, 比如研究分析"
+        "调用此工具组以获得额外点数"
     ),
 )
 
@@ -52,7 +53,6 @@ async def send(
     message: str,
     mentions: List[str] | None = None,
     reply_to: str | None = None,
-    added_timeout: float = 60.0,
 ) -> str:
     """
     在聊天中发送一条【中间性、试探性或思考过程】的消息。
@@ -65,7 +65,6 @@ async def send(
         message (str): 要发送的文本内容
         mentions (List[str] | None, optional): 需要@的用户ID列表 , 仅在针对性回复时使用
         reply_to (str | None, optional): 回复某条消息的ID, 仅在针对性回复时使用
-        added_timeout (float): 发送此消息后，为当前对话增加的超时时间（秒），默认为60秒
     """
     delay = min(4.0, max(0.0, len(message) * 0.1))
     if ctx.deps.nb_runtime is None:
@@ -73,7 +72,7 @@ async def send(
     if ctx.deps.ids.user_id is None:
         raise ValueError("User ID is required to send messages")
 
-    reschedule_deadline(ctx, delay + added_timeout)
+    reschedule_deadline(ctx, delay + 45)
 
     msg = build_uni_from_metions_and_reply(
         ctx=ctx,
@@ -121,7 +120,6 @@ async def ask(
     mentions: List[str] | None = None,
     reply_to: str | None = None,
     timeout: float = 30.0,
-    added_timeout: float = 60.0,
 ) -> ToolReturn:
     """
     向用户提出一个问题并等待其回复。
@@ -142,7 +140,7 @@ async def ask(
     if ctx.deps.ids.user_id is None:
         raise ValueError("User ID is required to ask questions")
 
-    reschedule_deadline(ctx, timeout + added_timeout)
+    reschedule_deadline(ctx, timeout + 45)
 
     msg = build_uni_from_metions_and_reply(
         ctx=ctx,

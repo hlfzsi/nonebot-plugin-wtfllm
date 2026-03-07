@@ -931,6 +931,13 @@ class TestExtractAndTrack:
         _extract_and_track("expensive_tool", (), {"ctx": ctx}, cost=5)
         assert ctx.deps.tool_points_used == 5
 
+    def test_negative_cost_increases_remaining_budget(self):
+        """负成本工具应返还本回合点数"""
+        ctx = _make_run_context(tool_budget=3, tool_points_used=0)
+        _extract_and_track("rewarding_tool", (), {"ctx": ctx}, cost=-2)
+        assert ctx.deps.tool_points_used == -2
+        assert ctx.deps.tool_points_remaining == 5
+
     def test_no_budget_tracking(self):
         """tool_budget_enabled=False 时 tool_points_used 不变"""
         ctx = _make_run_context(tool_budget=0, tool_points_used=0)
@@ -1091,6 +1098,15 @@ class TestResolveToolCost:
         )
         assert group.resolve_tool_cost("special") == 20
         assert group.resolve_tool_cost("other") == 3
+
+    def test_negative_default_cost(self):
+        """default_tool_cost 允许为负数，用于返还点数"""
+        group = ToolGroupMeta(
+            name="TestCost_NegativeDefault",
+            description="cost test",
+            default_tool_cost=-2,
+        )
+        assert group.resolve_tool_cost("rewarding_tool") == -2
 
 
 class TestGetInfoWithBudget:
