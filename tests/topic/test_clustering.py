@@ -11,7 +11,7 @@ from nonebot_plugin_wtfllm.topic._types import (
     TopicSessionState,
 )
 from nonebot_plugin_wtfllm.topic.clustering import TopicClustering
-from nonebot_plugin_wtfllm.topic.clustering import TopicVectorizer
+from nonebot_plugin_wtfllm.vec import TopicVectorizer
 
 
 @pytest.fixture

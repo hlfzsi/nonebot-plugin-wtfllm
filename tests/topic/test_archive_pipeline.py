@@ -16,9 +16,9 @@ from nonebot_plugin_wtfllm.topic._types import (
     SessionKey,
     TopicCluster,
 )
-from nonebot_plugin_wtfllm.topic.clustering.vectorizer import vectorizer
+from nonebot_plugin_wtfllm.vec import VECTORIZER
 
-TOPIC_DIM = vectorizer.transform("dim_probe").shape[1]
+TOPIC_DIM = VECTORIZER.transform("dim_probe").shape[1]
 
 
 # ── helpers ──────────────────────────────────────────────

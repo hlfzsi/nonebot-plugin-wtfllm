@@ -7,13 +7,13 @@ import asyncio
 import time
 from uuid import uuid4
 
-from ..clustering.vectorizer import vectorizer
 from ..clustering.mmr import mmr_select
 from .._types import ArchivalCandidate
 from ...config import APP_CONFIG
 from ...db import memory_item_repo
 from ...v_db.models.topic_archive import TopicArchivePayload
 from ...v_db import topic_archive_repo
+from ...vec import VECTORIZER
 from ...utils import logger
 
 # 过滤后，最少需要的独立代表消息数；低于此值放弃归档
@@ -99,7 +99,7 @@ async def archive_cluster(
         )
         return
 
-    vectors = await asyncio.to_thread(vectorizer.transform_batch, valid_texts)
+    vectors = await asyncio.to_thread(VECTORIZER.transform_batch, valid_texts)
 
     centroid = candidate.centroid.flatten()
     k = min(APP_CONFIG.topic_archive_mmr_k, len(valid_indices))

@@ -20,12 +20,12 @@ from nonebot_plugin_wtfllm.topic._types import (
 )
 from nonebot_plugin_wtfllm.topic.clustering.engine import TopicClustering
 from nonebot_plugin_wtfllm.topic.clustering.mmr import mmr_select
-from nonebot_plugin_wtfllm.topic.clustering.vectorizer import TopicVectorizer, vectorizer
 from nonebot_plugin_wtfllm.topic.manager import TopicManager
+from nonebot_plugin_wtfllm.vec import TopicVectorizer, VECTORIZER
 from nonebot_plugin_wtfllm.v_db.models.topic_archive import TopicArchivePayload
 
 
-TOPIC_DIM = vectorizer.transform("dim_probe").shape[1]
+TOPIC_DIM = VECTORIZER.transform("dim_probe").shape[1]
 
 
 # ── helpers ──────────────────────────────────────────────
@@ -480,21 +480,17 @@ class TestVectorizerIntegration:
 
     def test_transform_output_shape_and_norm(self):
         """transform 输出应为 1×D 的 L2 归一化向量"""
-        from nonebot_plugin_wtfllm.topic.clustering.vectorizer import vectorizer
-
-        vec = vectorizer.transform("测试文本")
+        vec = VECTORIZER.transform("测试文本")
         assert vec.shape == (1, TOPIC_DIM)
         norm = float(np.linalg.norm(vec))
         assert abs(norm - 1.0) < 1e-5
 
     def test_transform_batch_consistency(self):
         """batch transform 和单条 transform 应一致"""
-        from nonebot_plugin_wtfllm.topic.clustering.vectorizer import vectorizer
-
         texts = ["测试文本一", "测试文本二"]
-        batch = vectorizer.transform_batch(texts)
-        single_0 = vectorizer.transform(texts[0])
-        single_1 = vectorizer.transform(texts[1])
+        batch = VECTORIZER.transform_batch(texts)
+        single_0 = VECTORIZER.transform(texts[0])
+        single_1 = VECTORIZER.transform(texts[1])
 
         assert batch.shape == (2, TOPIC_DIM)
         np.testing.assert_allclose(batch[0], single_0.flatten(), atol=1e-5)
@@ -502,11 +498,9 @@ class TestVectorizerIntegration:
 
     def test_similar_texts_have_high_cosine(self):
         """语义相似文本的余弦相似度应较高"""
-        from nonebot_plugin_wtfllm.topic.clustering.vectorizer import vectorizer
-
-        v1 = vectorizer.transform("今天吃了红烧肉很好吃").flatten()
-        v2 = vectorizer.transform("今天吃了糖醋排骨味道不错").flatten()
-        v3 = vectorizer.transform("Python异步编程asyncio框架").flatten()
+        v1 = VECTORIZER.transform("今天吃了红烧肉很好吃").flatten()
+        v2 = VECTORIZER.transform("今天吃了糖醋排骨味道不错").flatten()
+        v3 = VECTORIZER.transform("Python异步编程asyncio框架").flatten()
 
         sim_food = float(np.dot(v1, v2))
         sim_cross = float(np.dot(v1, v3))

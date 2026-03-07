@@ -13,9 +13,9 @@ import numpy as np
 import pytest
 
 from nonebot_plugin_wtfllm.topic._types import SessionKey, TopicSessionState
-from nonebot_plugin_wtfllm.topic.manager import TopicManager
-from nonebot_plugin_wtfllm.topic.clustering import TopicVectorizer
 from nonebot_plugin_wtfllm.topic.clustering import TopicClustering
+from nonebot_plugin_wtfllm.topic.manager import TopicManager
+from nonebot_plugin_wtfllm.vec import TopicVectorizer
 
 
 def sizeof_deep(obj, seen=None):

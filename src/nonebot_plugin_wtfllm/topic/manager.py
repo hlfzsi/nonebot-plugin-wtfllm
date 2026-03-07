@@ -6,7 +6,7 @@ from cachetools import LRUCache
 
 from ._types import ArchivalCandidate, SessionKey, TopicCluster, TopicSessionState
 from .clustering.engine import TopicClustering
-from .clustering.vectorizer import vectorizer
+from ..vec import VECTORIZER
 from ..utils import logger
 
 
@@ -38,7 +38,7 @@ class TopicManager:
     ) -> None:
         self._sessions: LRUCache[str, _SessionContext] = LRUCache(maxsize=maxsize)
         self._lock = asyncio.Lock()
-        self._vectorizer = vectorizer
+        self._vectorizer = VECTORIZER
         self._cluster_threshold = cluster_threshold
         self._max_clusters = max_clusters
         self._decay_seconds = decay_seconds
