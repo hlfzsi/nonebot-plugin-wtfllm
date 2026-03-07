@@ -25,13 +25,6 @@ _alias_cache: LRUCache[str, Dict[UserOrGroupID, Alias]] = LRUCache(maxsize=100)
 _group_alias_cache: LRUCache[GroupID, Alias] = LRUCache(maxsize=100)
 
 
-def get_handle_key(bot: Bot, session: Uninfo) -> str:
-    adapter = bot.adapter.get_name()
-    info = extract_session_info(session)
-    group_part = info["group_id"] or "private"
-    return f"{adapter}:{bot.self_id}:{info['user_id']}:{group_part}"
-
-
 def get_conv_key(bot: Bot, session: Uninfo) -> str:
     """生成会话级别的队列键（群聊按 group_id，私聊按 user_id）"""
     adapter = bot.adapter.get_name()
@@ -41,19 +34,18 @@ def get_conv_key(bot: Bot, session: Uninfo) -> str:
 
 @contextmanager
 def handle_control(bot: Bot, session: Uninfo) -> Generator[bool, None, None]:
-    key = get_handle_key(bot, session)
+    key = get_conv_key(bot, session)
     if key in _in_handle:
         yield False
         return
 
-    conv_key = get_conv_key(bot, session)
     _in_handle.add(key)
-    create_queue(conv_key)
+    create_queue(key)
     try:
         yield True
     finally:
         _in_handle.discard(key)
-        remove_queue(conv_key)
+        remove_queue(key)
 
 
 def try_enqueue_message(bot: Bot, session: Uninfo, item: "MemoryItemUnion") -> bool:

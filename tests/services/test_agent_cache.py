@@ -4,7 +4,6 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from nonebot_plugin_wtfllm.services.func.agent_cache import (
-    get_handle_key,
     get_conv_key,
     handle_control,
     try_enqueue_message,
@@ -18,8 +17,13 @@ from nonebot_plugin_wtfllm.services.func.agent_cache import (
 
 
 def _make_bot_session(
-    adapter="test", bot_id="bot1", user_id="u1",
-    group_id=None, nick=None, name=None, group_name=None,
+    adapter="test",
+    bot_id="bot1",
+    user_id="u1",
+    group_id=None,
+    nick=None,
+    name=None,
+    group_name=None,
 ):
     bot = MagicMock()
     bot.adapter.get_name.return_value = adapter
@@ -55,18 +59,6 @@ def _clean_caches():
 MODULE = "nonebot_plugin_wtfllm.services.func.agent_cache"
 
 
-class TestGetHandleKey:
-    def test_group_chat(self):
-        bot, session = _make_bot_session(group_id="g1")
-        key = get_handle_key(bot, session)
-        assert key == "test:bot1:u1:g1"
-
-    def test_private_chat(self):
-        bot, session = _make_bot_session()
-        key = get_handle_key(bot, session)
-        assert key == "test:bot1:u1:private"
-
-
 class TestGetConvKey:
     @patch(f"{MODULE}.get_conversation_key", return_value="conv_key_1")
     def test_group_chat(self, mock_conv):
@@ -91,7 +83,7 @@ class TestHandleControl:
         bot, session = _make_bot_session()
         with handle_control(bot, session) as entered:
             assert entered is True
-            handle_key = get_handle_key(bot, session)
+            handle_key = mock_conv.return_value
             assert handle_key in _in_handle
         assert handle_key not in _in_handle
         mock_create.assert_called_once_with("conv1")
@@ -102,7 +94,7 @@ class TestHandleControl:
     @patch(f"{MODULE}.get_conv_key", return_value="conv1")
     def test_concurrent_entry_yields_false(self, mock_conv, mock_create, mock_remove):
         bot, session = _make_bot_session()
-        handle_key = get_handle_key(bot, session)
+        handle_key = mock_conv.return_value
         _in_handle.add(handle_key)
         with handle_control(bot, session) as entered:
             assert entered is False

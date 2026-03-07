@@ -80,6 +80,7 @@ class TestChatAgentFake:
                                 "responses": ["你好！很高兴认识你"],
                                 "mentions": [],
                                 "meme": None,
+                                "interested_topics": None,
                             }
                         ),
                     )
@@ -110,8 +111,8 @@ class TestChatAgentFake:
                         args=json.dumps(
                             {
                                 "reason": "不想回答",
-                                "should_show_user": False,
-                                "message_to_show": None,
+                                "message_to_user": None,
+                                "interested_topics": None,
                             }
                         ),
                     )
@@ -141,6 +142,7 @@ class TestChatAgentFake:
                             {
                                 "markdown_content": "# Hello\n\nWorld",
                                 "summary": "Hello World 摘要",
+                                "interested_topics": None,
                             }
                         ),
                     )
@@ -284,6 +286,7 @@ class TestAgentOverride:
                                 "responses": ["fake response"],
                                 "mentions": [],
                                 "meme": None,
+                                "interested_topics": None,
                             }
                         ),
                     )

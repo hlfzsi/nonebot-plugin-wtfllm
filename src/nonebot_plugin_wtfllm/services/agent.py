@@ -22,6 +22,7 @@ from ..utils import APP_CONFIG, logger, get_agent_id_from_bot, extract_session_i
 from ..db import user_persona_repo
 from ..abilities import attention_router
 from ..msg_tracker import msg_tracker
+from ..proactive import should_proactively_respond, topic_interest_store
 
 matcher = on_message(block=True, priority=99)
 
@@ -46,6 +47,11 @@ async def handle(
             group_id=usable_group_id,
             agent_id=agent_id,
         )
+        topic_interest_store.clear_topics(
+            user_id=usable_user_id,
+            group_id=usable_group_id,
+            agent_id=agent_id,
+        )
         return
     if like_command(uni_msg):
         return
@@ -58,12 +64,19 @@ async def handle(
 
         agent_id = get_agent_id_from_bot(session)
         cached_aliases[agent_id] = APP_CONFIG.bot_name
+        query = uni_msg.extract_plain_text()
         poi = attention_router.get_and_consume_poi(
             user_id=usable_user_id,
             group_id=usable_group_id,
             agent_id=agent_id,
         )
-        if not is_to_me and not poi:
+        should_reply_proactively = await should_proactively_respond(
+            agent_id=agent_id,
+            user_id=usable_user_id,
+            group_id=usable_group_id,
+            plain_text=query,
+        )
+        if not is_to_me and not poi and not should_reply_proactively:
             return
 
         persona = await user_persona_repo.get_persona_text(
@@ -102,8 +115,6 @@ async def handle(
             if gid:
                 builder.ctx.alias_provider.register_group(gid)
 
-        query = uni_msg.extract_plain_text()
-
         if usable_group_id:
             chain = RetrievalChain(
                 agent_id=agent_id,
@@ -119,9 +130,7 @@ async def handle(
 
         chain.main_chat(
             limit=APP_CONFIG.short_memory_max_count,
-        ).core_memory().cross_session_memory().tool_history(
-            limit=APP_CONFIG.tool_call_record_max_count,
-        ).knowledge(
+        ).core_memory().cross_session_memory().knowledge(
             limit=APP_CONFIG.knowledge_base_max_results,
             max_tokens=APP_CONFIG.knowledge_base_max_tokens,
         ).recent_react(

@@ -14,10 +14,16 @@ from ..memory import ImageSegment
 from ..db import tool_call_record_repo
 from ..v_db import meme_repo
 from .deps import AgentDeps
+from ..proactive import topic_interest_store
 from ..stream_processing import store_message_with_context
 
 
 class SendableResponse(BaseModel, ABC):
+    interested_topics: List[str] | None = Field(
+        ...,
+        description="预测用户接下来可能继续提及的主题线索列表。后续消息若与这些主题语义相关，可用于判断是否延续当前对话",
+    )
+
     async def send(
         self,
         context: AgentDeps,
@@ -66,6 +72,17 @@ class SendableResponse(BaseModel, ABC):
                 group_id=context.ids.group_id,
                 track_message=True,
                 ingest_topic=ingest_topic,
+            )
+
+        if context.ids.user_id:
+            logger.debug(
+                f"Setting topic interests for user {context.ids.user_id}: {self.interested_topics}"
+            )
+            topic_interest_store.set_topics(
+                agent_id=context.ids.agent_id,
+                user_id=context.ids.user_id,
+                group_id=context.ids.group_id,
+                topics=self.interested_topics,
             )
 
     @abstractmethod
