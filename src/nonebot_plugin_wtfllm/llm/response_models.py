@@ -20,6 +20,7 @@ from ..stream_processing import store_message_with_context
 
 
 class SendableResponse(BaseModel, ABC):
+    confirm: str = Field(..., description="确认完成准备, 比如工具调度")
     interested_topics: List[str] | None = Field(
         ...,
         description="预测用户接下来可能继续提及的主题线索列表。后续消息若与这些主题语义相关，可用于判断是否延续当前对话",

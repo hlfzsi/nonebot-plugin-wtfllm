@@ -75,8 +75,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_TextResponse",
-                        args=json.dumps(
+                            args=json.dumps(
                             {
+                                "confirm": "ok",
                                 "responses": ["你好！很高兴认识你"],
                                 "mentions": [],
                                 "meme": None,
@@ -108,8 +109,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_RejectResponse",
-                        args=json.dumps(
+                            args=json.dumps(
                             {
+                                "confirm": "ok",
                                 "reason": "不想回答",
                                 "message_to_user": None,
                                 "interested_topics": None,
@@ -138,8 +140,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_MarkdownResponse",
-                        args=json.dumps(
+                            args=json.dumps(
                             {
+                                "confirm": "ok",
                                 "markdown_content": "# Hello\n\nWorld",
                                 "summary": "Hello World 摘要",
                                 "interested_topics": None,
@@ -281,8 +284,9 @@ class TestAgentOverride:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_TextResponse",
-                        args=json.dumps(
+                            args=json.dumps(
                             {
+                                "confirm": "ok",
                                 "responses": ["fake response"],
                                 "mentions": [],
                                 "meme": None,
