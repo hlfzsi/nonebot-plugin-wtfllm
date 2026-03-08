@@ -52,7 +52,7 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"] 
-addopts = "--cov=nonebot_plugin_wtfllm --cov-report=term-missing"
+addopts = "--cov=src/nonebot_plugin_wtfllm --cov-report=term-missing"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [

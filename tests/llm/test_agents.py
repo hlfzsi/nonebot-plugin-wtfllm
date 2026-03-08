@@ -7,7 +7,7 @@
 import json
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, models
@@ -75,9 +75,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_TextResponse",
-                            args=json.dumps(
+                        args=json.dumps(
                             {
-                                "confirm": "ok",
+                                "thought_of_chain": "ok",
                                 "responses": ["你好！很高兴认识你"],
                                 "mentions": [],
                                 "meme": None,
@@ -109,9 +109,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_RejectResponse",
-                            args=json.dumps(
+                        args=json.dumps(
                             {
-                                "confirm": "ok",
+                                "thought_of_chain": "ok",
                                 "reason": "不想回答",
                                 "message_to_user": None,
                                 "interested_topics": None,
@@ -140,9 +140,9 @@ class TestChatAgentFake:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_MarkdownResponse",
-                            args=json.dumps(
+                        args=json.dumps(
                             {
-                                "confirm": "ok",
+                                "thought_of_chain": "ok",
                                 "markdown_content": "# Hello\n\nWorld",
                                 "summary": "Hello World 摘要",
                                 "interested_topics": None,
@@ -190,7 +190,7 @@ class TestAgentWithTools:
                     ]
                 )
             else:
-                # 第二轮：根据工具返回生成最终回复
+                # 第二轮：根据工具返回生成最终回
                 return ModelResponse(parts=[TextPart(content='{"reason":"done"}')])
 
         agent = Agent(
@@ -250,9 +250,9 @@ class TestAgentWithTools:
 
 
 # ===================== Agent.override 测试 =====================
-# 注意：由于 agents.py 在模块级别创建 OpenAIProvider（需要真实配置），
-# 直接导入 CHAT_AGENT 在测试环境中不可用。
-# override 功能已通过 TestModel / FunctionModel 覆盖。
+# 注意：由agents.py 在模块级别创OpenAIProvider（需要真实配置）
+# 直接导入 CHAT_AGENT 在测试环境中不可用
+# override 功能已通过 TestModel / FunctionModel 覆盖
 
 
 class TestAgentOverride:
@@ -260,7 +260,7 @@ class TestAgentOverride:
 
     @pytest.mark.asyncio
     async def test_override_with_test_model(self):
-        """Agent.override 可以替换模型为 TestModel"""
+        """Agent.override 可以替换模型TestModel"""
         dummy_agent = Agent(
             TestModel(),
             output_type=SimpleOutput,
@@ -272,7 +272,7 @@ class TestAgentOverride:
 
     @pytest.mark.asyncio
     async def test_override_with_function_model(self):
-        """Agent.override 可以替换模型为 FunctionModel"""
+        """Agent.override 可以替换模型FunctionModel"""
         dummy_agent = Agent(
             TestModel(),
             output_type=CHAT_OUTPUT,
@@ -284,9 +284,9 @@ class TestAgentOverride:
                 parts=[
                     ToolCallPart(
                         tool_name="final_result_TextResponse",
-                            args=json.dumps(
+                        args=json.dumps(
                             {
-                                "confirm": "ok",
+                                "thought_of_chain": "ok",
                                 "responses": ["fake response"],
                                 "mentions": [],
                                 "meme": None,
@@ -324,4 +324,4 @@ class TestAgentMessages:
 
         result = await agent.run("test", deps=_make_deps())
         all_msgs = result.all_messages()
-        assert len(all_msgs) >= 2  # 至少有 request 和 response
+        assert len(all_msgs) >= 2  # 至少request response

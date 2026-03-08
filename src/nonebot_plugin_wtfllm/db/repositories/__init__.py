@@ -9,6 +9,7 @@ __all__ = [
     "UserPersonaRepository",
     "ScheduledJobRepository",
     "ToolCallRecordRepository",
+    "ThoughtRecordRepository",
 ]
 
 from .base import BaseRepository
@@ -16,3 +17,4 @@ from .memory_items import MemoryItemRepository
 from .user_persona import UserPersonaRepository
 from .scheduled_job import ScheduledJobRepository
 from .tool_call_record import ToolCallRecordRepository
+from .thought_record import ThoughtRecordRepository

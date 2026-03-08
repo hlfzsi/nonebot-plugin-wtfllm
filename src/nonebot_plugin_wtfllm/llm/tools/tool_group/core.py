@@ -12,7 +12,7 @@ from ...deps import Context
 from ....utils import APP_CONFIG, logger
 from ....memory import ImageSegment
 from ....memory.items.storages import MemoryItemStream
-from ....db import memory_item_repo, tool_call_record_repo
+from ....db import memory_item_repo, tool_call_record_repo, thought_record_repo
 from ....services.func.memory_retrieval import RetrievalChain
 from ....abilities import (
     attention_router,
@@ -438,6 +438,34 @@ async def query_tool_call_history(
         lines.append(line)
     result = "\n".join(lines)
     return result
+
+
+@core_group.tool(cost=1)
+async def query_thought_of_chain_history(
+    ctx: Context,
+    limit: int = 1,
+) -> str:
+    """查询当前会话最近的显式思考记录
+
+    当你需要回顾自己在之前回合中的思考摘要时调用。
+
+    Args:
+        limit: 返回记录数量，默认1
+    """
+    records = await thought_record_repo.get_recent(
+        agent_id=ctx.deps.ids.agent_id,
+        group_id=ctx.deps.ids.group_id,
+        user_id=ctx.deps.ids.user_id if not ctx.deps.ids.group_id else None,
+        limit=limit,
+    )
+    if not records:
+        return "当前会话暂无思考记录。"
+
+    lines = []
+    for record in records:
+        ts_str = datetime.datetime.fromtimestamp(record.timestamp).strftime("%m-%d %H:%M")
+        lines.append(f"[{ts_str}] {record.thought_of_chain}")
+    return "\n".join(lines)
 
 
 @core_group.tool(cost=2)

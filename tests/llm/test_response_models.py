@@ -1,13 +1,13 @@
 """llm/response_models.py 单元测试
 
-覆盖 TextResponse, MarkdownResponse, RejectResponse 的
-模型创建和 send 行为（使用 mock 的 NonebotRuntime）。
+覆盖 TextResponse, MarkdownResponse, RejectResponse 
+模型创建send 行为（使mock NonebotRuntime）
 """
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# 直接导入子模块避免 llm.__init__ 的循环导入
+# 直接导入子模块避llm.__init__ 的循环导入问题
 import nonebot_plugin_wtfllm.llm.response_models as _rm
 import nonebot_plugin_wtfllm.llm.deps as _deps
 
@@ -21,7 +21,7 @@ IDs = _deps.IDs
 NonebotRuntime = _deps.NonebotRuntime
 
 
-# ===================== 辅助构造 =====================
+# ===================== 辅助构建测试数据 =====================
 
 
 def _make_deps(with_runtime: bool = True, user_id: str = "u1") -> AgentDeps:
@@ -57,7 +57,7 @@ class TestTextResponseModel:
     """TextResponse 模型测试"""
 
     def test_create_basic(self):
-        resp = TextResponse(confirm="ok", responses=["Hello!"], meme=None, interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["Hello!"], meme=None, interested_topics=None)
         assert resp.responses == ["Hello!"]
         assert resp.meme is None
         assert resp.mentions == []
@@ -65,7 +65,7 @@ class TestTextResponseModel:
 
     def test_create_with_mentions(self):
         resp = TextResponse(
-            confirm="ok",
+            thought_of_chain="ok",
             responses=["Hi there"],
             mentions=["user_a", "user_b"],
             meme=None,
@@ -74,7 +74,7 @@ class TestTextResponseModel:
         assert len(resp.mentions) == 2
 
     def test_create_with_meme(self):
-        resp = TextResponse(confirm="ok", responses=["look"], meme="uuid-123", interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["look"], meme="uuid-123", interested_topics=None)
         assert resp.meme == "uuid-123"
 
 
@@ -83,7 +83,7 @@ class TestMarkdownResponseModel:
 
     def test_create(self):
         resp = MarkdownResponse(
-            confirm="ok",
+            thought_of_chain="ok",
             markdown_content="# Title\n\nContent",
             summary="Title content summary",
             interested_topics=None,
@@ -96,13 +96,13 @@ class TestRejectResponseModel:
     """RejectResponse 模型测试"""
 
     def test_create_basic(self):
-        resp = RejectResponse(confirm="ok", reason="not relevant", interested_topics=None)
+        resp = RejectResponse(thought_of_chain="ok", reason="not relevant", interested_topics=None)
         assert resp.reason == "not relevant"
         assert resp.message_to_user is None
 
     def test_create_show_user(self):
         resp = RejectResponse(
-            confirm="ok",
+            thought_of_chain="ok",
             reason="off-topic",
             message_to_user="这不是我能回答的",
             interested_topics=None,
@@ -131,14 +131,14 @@ class TestTextResponseSend:
     @pytest.mark.asyncio
     async def test_send_requires_runtime(self):
         deps = _make_deps(with_runtime=False)
-        resp = TextResponse(confirm="ok", responses=["test"], meme=None, interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["test"], meme=None, interested_topics=None)
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp.send(deps)
 
     @pytest.mark.asyncio
     async def test_send_requires_user_id(self):
         deps = _make_deps(user_id=None)
-        resp = TextResponse(confirm="ok", responses=["test"], meme=None, interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["test"], meme=None, interested_topics=None)
         with pytest.raises(ValueError, match="User ID"):
             await resp.send(deps)
 
@@ -162,7 +162,7 @@ class TestTextResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["Hello!"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["Hello!"], meme=None, interested_topics=None)
             await resp.send(deps)
 
             mock_store.assert_called_once()
@@ -175,7 +175,7 @@ class TestRejectResponseSend:
     async def test_send_silent_reject(self):
         """静默拒绝不发送消息"""
         deps = _make_deps()
-        resp = RejectResponse(confirm="ok", reason="no", interested_topics=None)
+        resp = RejectResponse(thought_of_chain="ok", reason="no", interested_topics=None)
 
         # 不应抛出异常
         with patch(
@@ -206,7 +206,7 @@ class TestRejectResponseSend:
             MockUniMsg.return_value = mock_msg
 
             resp = RejectResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 reason="off topic",
                 message_to_user="不好意思",
                 interested_topics=None,
@@ -223,7 +223,7 @@ class TestMarkdownResponseSend:
     async def test_send_requires_runtime(self):
         deps = _make_deps(with_runtime=False)
         resp = MarkdownResponse(
-            confirm="ok",
+            thought_of_chain="ok",
             markdown_content="# Test",
             summary="Test summary",
             interested_topics=None,
@@ -232,7 +232,7 @@ class TestMarkdownResponseSend:
             await resp.send(deps)
 
 
-# ===================== 补充测试：SendableResponse.send 工具链 =====================
+# ===================== 补充测试：SendableResponse.send 工具链持久化逻辑 =====================
 
 MODULE = "nonebot_plugin_wtfllm.llm.response_models"
 
@@ -240,7 +240,7 @@ ToolCallInfo = _deps.ToolCallInfo
 
 
 def _make_tool_call_info(**overrides) -> ToolCallInfo:
-    """创建一个 ToolCallInfo 实例用于测试"""
+    """创建一个ToolCallInfo 实例用于测试"""
     defaults = dict(
         run_id="run-1",
         round_index=0,
@@ -257,17 +257,19 @@ class TestSendableResponseSend:
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
+    @patch(f"{MODULE}.thought_record_repo")
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_with_tool_chain(
-        self, mock_repo, mock_store
+        self, mock_tool_repo, mock_thought_repo, mock_store
     ):
-        """tool_chain 非空时调用 save_batch_from_tool_call_info"""
+        """tool_chain 非空时调save_batch_from_tool_call_info"""
         deps = _make_deps()
         tc = _make_tool_call_info()
         deps.tool_chain = [tc]
 
-        mock_repo.save_batch_from_tool_call_info = AsyncMock()
-        mock_repo.save_empty_record = AsyncMock()
+        mock_tool_repo.save_batch_from_tool_call_info = AsyncMock()
+        mock_tool_repo.save_empty_record = AsyncMock()
+        mock_thought_repo.save_record = AsyncMock()
 
         with patch(f"{MODULE}.UniMessage") as MockUniMsg:
             mock_msg = MagicMock()
@@ -275,29 +277,38 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["ok"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["ok"], meme=None, interested_topics=None)
             await resp.send(deps)
 
-        mock_repo.save_batch_from_tool_call_info.assert_called_once_with(
+        mock_tool_repo.save_batch_from_tool_call_info.assert_called_once_with(
             infos=[tc],
             agent_id="a1",
             group_id="g1",
             user_id="u1",
         )
-        mock_repo.save_empty_record.assert_not_called()
+        mock_tool_repo.save_empty_record.assert_not_called()
+        mock_thought_repo.save_record.assert_called_once_with(
+            thought_of_chain="ok",
+            agent_id="a1",
+            group_id="g1",
+            user_id="u1",
+            run_id="run-1",
+        )
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
+    @patch(f"{MODULE}.thought_record_repo")
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_without_tool_chain(
-        self, mock_repo, mock_store
+        self, mock_tool_repo, mock_thought_repo, mock_store
     ):
-        """tool_chain 为空时调用 save_empty_record"""
+        """tool_chain 为空时调save_empty_record"""
         deps = _make_deps()
         deps.tool_chain = []
 
-        mock_repo.save_batch_from_tool_call_info = AsyncMock()
-        mock_repo.save_empty_record = AsyncMock()
+        mock_tool_repo.save_batch_from_tool_call_info = AsyncMock()
+        mock_tool_repo.save_empty_record = AsyncMock()
+        mock_thought_repo.save_record = AsyncMock()
 
         with patch(f"{MODULE}.UniMessage") as MockUniMsg:
             mock_msg = MagicMock()
@@ -305,21 +316,29 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["ok"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["ok"], meme=None, interested_topics=None)
             await resp.send(deps)
 
-        mock_repo.save_empty_record.assert_called_once_with(
+        mock_tool_repo.save_empty_record.assert_called_once_with(
             agent_id="a1",
             group_id="g1",
             user_id="u1",
         )
-        mock_repo.save_batch_from_tool_call_info.assert_not_called()
+        mock_tool_repo.save_batch_from_tool_call_info.assert_not_called()
+        mock_thought_repo.save_record.assert_called_once_with(
+            thought_of_chain="ok",
+            agent_id="a1",
+            group_id="g1",
+            user_id="u1",
+            run_id=None,
+        )
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
+    @patch(f"{MODULE}.thought_record_repo")
     @patch(f"{MODULE}.tool_call_record_repo")
     async def test_send_tool_chain_error_continues(
-        self, mock_repo, mock_store
+        self, mock_tool_repo, mock_thought_repo, mock_store
     ):
         """save_batch 抛出 SQLAlchemyError 时仍继续调用 _perform_send"""
         from sqlalchemy.exc import SQLAlchemyError
@@ -327,8 +346,39 @@ class TestSendableResponseSend:
         deps = _make_deps()
         deps.tool_chain = [_make_tool_call_info()]
 
-        mock_repo.save_batch_from_tool_call_info = AsyncMock(
+        mock_tool_repo.save_batch_from_tool_call_info = AsyncMock(
             side_effect=SQLAlchemyError("db down")
+        )
+        mock_thought_repo.save_record = AsyncMock()
+
+        with patch(f"{MODULE}.UniMessage") as MockUniMsg:
+            mock_msg = MagicMock()
+            mock_msg.send = AsyncMock(return_value=MagicMock())
+            mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
+            MockUniMsg.return_value = mock_msg
+
+            resp = TextResponse(thought_of_chain="ok", responses=["ok"], meme=None, interested_topics=None)
+            # 不应抛出异常，_perform_send 仍应执行
+            await resp.send(deps)
+
+        # 验证 _perform_send 仍被执行（store 被调用）
+        mock_store.assert_called_once()
+        mock_thought_repo.save_record.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
+    @patch(f"{MODULE}.thought_record_repo")
+    @patch(f"{MODULE}.tool_call_record_repo")
+    async def test_send_thought_persist_error_continues(
+        self, mock_tool_repo, mock_thought_repo, mock_store
+    ):
+        from sqlalchemy.exc import SQLAlchemyError
+
+        deps = _make_deps()
+        mock_tool_repo.save_empty_record = AsyncMock()
+        mock_tool_repo.save_batch_from_tool_call_info = AsyncMock()
+        mock_thought_repo.save_record = AsyncMock(
+            side_effect=SQLAlchemyError("thought repo down")
         )
 
         with patch(f"{MODULE}.UniMessage") as MockUniMsg:
@@ -337,11 +387,9 @@ class TestSendableResponseSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["ok"], meme=None, interested_topics=None)
-            # 不应抛出异常，_perform_send 仍应执行
+            resp = TextResponse(thought_of_chain="ok", responses=["ok"], meme=None, interested_topics=None)
             await resp.send(deps)
 
-        # 验证 _perform_send 仍被执行（store 被调用）
         mock_store.assert_called_once()
 
     @pytest.mark.asyncio
@@ -359,7 +407,7 @@ class TestSendableResponseSend:
             MockUniMsg.return_value = mock_msg
 
             resp = TextResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 responses=["ok"],
                 meme=None,
                 interested_topics=["天气", "周末安排"],
@@ -380,7 +428,7 @@ class TestSendableResponseSend:
         self, mock_store, mock_topic_interest_store
     ):
         deps = _make_deps()
-        resp = RejectResponse(confirm="ok", reason="no", interested_topics=["天气"])
+        resp = RejectResponse(thought_of_chain="ok", reason="no", interested_topics=["天气"])
 
         await resp.send(deps)
 
@@ -401,17 +449,17 @@ class TestTextResponsePerformSend:
 
     @pytest.mark.asyncio
     async def test_no_runtime_raises(self):
-        """nb_runtime=None 时抛出 ValueError"""
+        """nb_runtime=None 时抛ValueError"""
         deps = _make_deps(with_runtime=False)
-        resp = TextResponse(confirm="ok", responses=["test"], meme=None, interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["test"], meme=None, interested_topics=None)
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp._perform_send(deps)
 
     @pytest.mark.asyncio
     async def test_no_user_id_raises(self):
-        """user_id=None 时抛出 ValueError"""
+        """user_id=None 时抛ValueError"""
         deps = _make_deps(user_id=None)
-        resp = TextResponse(confirm="ok", responses=["test"], meme=None, interested_topics=None)
+        resp = TextResponse(thought_of_chain="ok", responses=["test"], meme=None, interested_topics=None)
         with pytest.raises(ValueError, match="User ID"):
             await resp._perform_send(deps)
 
@@ -429,10 +477,10 @@ class TestTextResponsePerformSend:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["Hello world"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["Hello world"], meme=None, interested_topics=None)
             results = await resp._perform_send(deps)
 
-            # 应调用 text() 而不调用 at()
+            # 应调text() 而不调用 at()
             mock_msg.text.assert_called_once_with("Hello world")
             mock_msg.at.assert_not_called()
             mock_msg.send.assert_called_once_with(
@@ -447,7 +495,7 @@ class TestTextResponsePerformSend:
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
     @patch(f"{MODULE}.ensure_msgid_from_receipt", return_value="msg-002")
     async def test_with_mentions(self, mock_ensure, mock_store):
-        """mentions 列表非空时调用 resolve_aliases 并 at()"""
+        """mentions 列表非空时调resolve_aliases at()"""
         deps = _make_deps()
         # resolve_aliases 返回解析后的别名
         deps.context.resolve_aliases = MagicMock(
@@ -462,7 +510,7 @@ class TestTextResponsePerformSend:
             MockUniMsg.return_value = mock_msg
 
             resp = TextResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 responses=["Hi!"],
                 mentions=["alice", "bob"],
                 meme=None,
@@ -491,7 +539,7 @@ class TestTextResponsePerformSend:
 
         deps = _make_deps()
 
-        # 构造 mock ImageSegment
+        # 构mock ImageSegment
         mock_image_seg = MagicMock(spec=ImageSegment)
         mock_image_seg.available = True
         mock_image_seg.local_path = "/tmp/meme.webp"
@@ -508,7 +556,7 @@ class TestTextResponsePerformSend:
             MockUniMsg.return_value = mock_msg
 
             resp = TextResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 responses=["Look at this!"],
                 meme="meme-uuid-1",
                 interested_topics=None,
@@ -520,7 +568,7 @@ class TestTextResponsePerformSend:
                 "meme-uuid-1", ImageSegment
             )
 
-            # 应通过 local_path 路径读取字节并调用 image(raw=...)
+            # 应通过 local_path 路径读取字节并调image(raw=...)
             mock_image_seg.get_bytes_async.assert_called_once()
             mock_msg.image.assert_called_once_with(raw=b"fake-image-bytes")
 
@@ -533,9 +581,9 @@ class TestRejectResponsePerformSend:
 
     @pytest.mark.asyncio
     async def test_no_runtime_raises(self):
-        """nb_runtime=None 时抛出 ValueError"""
+        """nb_runtime=None 时抛ValueError"""
         deps = _make_deps(with_runtime=False)
-        resp = RejectResponse(confirm="ok", reason="no", interested_topics=None)
+        resp = RejectResponse(thought_of_chain="ok", reason="no", interested_topics=None)
         with pytest.raises(ValueError, match="NonebotRuntime"):
             await resp._perform_send(deps)
 
@@ -544,7 +592,7 @@ class TestRejectResponsePerformSend:
     async def test_silent_reject(self, mock_store):
         """message_to_user=None 时不发送消息、不 store"""
         deps = _make_deps()
-        resp = RejectResponse(confirm="ok", reason="not relevant", interested_topics=None)
+        resp = RejectResponse(thought_of_chain="ok", reason="not relevant", interested_topics=None)
 
         await resp._perform_send(deps)
 
@@ -567,14 +615,14 @@ class TestRejectResponsePerformSend:
             MockUniMsg.return_value = mock_msg
 
             resp = RejectResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 reason="off topic",
                 message_to_user="Sorry, I cannot help with that.",
                 interested_topics=None,
             )
             results = await resp._perform_send(deps)
 
-            # 应调用 text() 并发送
+            # 应调text() 并发
             mock_msg.text.assert_called_once_with(
                 "Sorry, I cannot help with that."
             )
@@ -595,10 +643,10 @@ class TestMarkdownResponsePerformSend:
 
     @pytest.mark.asyncio
     async def test_no_runtime_raises(self):
-        """nb_runtime=None 时抛出 ValueError"""
+        """nb_runtime=None 时抛ValueError"""
         deps = _make_deps(with_runtime=False)
         resp = MarkdownResponse(
-            confirm="ok",
+            thought_of_chain="ok",
             markdown_content="# Test",
             summary="Test",
             interested_topics=None,
@@ -631,22 +679,22 @@ class TestMarkdownResponsePerformSend:
             MockImage.return_value = mock_image_obj
 
             resp = MarkdownResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 markdown_content="# Hello\n\nWorld",
                 summary="Hello world summary",
                 interested_topics=None,
             )
             results = await resp._perform_send(deps)
 
-            # 应渲染 markdown
+            # 应渲markdown
             mock_render.assert_called_once_with("# Hello\n\nWorld")
 
-            # 应创建 Image 对象
+            # 应创Image 对象
             MockImage.assert_called_once_with(
                 raw=b"fake-png-bytes", name="response.webp"
             )
 
-            # 应发送消息
+            # 应发送消
             mock_msg.send.assert_called_once_with(
                 target=deps.nb_runtime.target
             )
@@ -685,14 +733,14 @@ class TestTextResponseMemeUrl:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["check this"], meme="IMG:1", interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["check this"], meme="IMG:1", interested_topics=None)
             await resp._perform_send(deps)
 
             mock_msg.image.assert_called_once_with(url="http://example.com/meme.jpg")
 
 
 class TestTextResponseMemeFromRepo:
-    """TextResponse meme 从 meme_repo 回退获取"""
+    """TextResponse meme meme_repo 回退获取"""
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -704,7 +752,7 @@ class TestTextResponseMemeFromRepo:
         """resolve_media_ref 失败后从 meme_repo 获取成功"""
         deps = _make_deps()
 
-        # resolve_media_ref 抛 ValueError -> _meme = None
+        # resolve_media_ref ValueError -> _meme = None
         deps.context.resolve_media_ref = MagicMock(side_effect=ValueError("no ref"))
 
         mock_payload = AsyncMock()
@@ -719,7 +767,7 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["look"], meme="meme-uuid", interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["look"], meme="meme-uuid", interested_topics=None)
             await resp._perform_send(deps)
 
             mock_meme_repo.get_meme_by_id.assert_called_once_with("meme-uuid")
@@ -746,7 +794,7 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["look"], meme="nonexistent", interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["look"], meme="nonexistent", interested_topics=None)
             await resp._perform_send(deps)
 
             # 应调用 text("\n哎呀图丢了")
@@ -771,14 +819,14 @@ class TestTextResponseMemeFromRepo:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["look"], meme="broken", interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["look"], meme="broken", interested_topics=None)
             await resp._perform_send(deps)
 
             mock_msg.text.assert_any_call("\n哎呀图丢了")
 
 
 class TestTextResponseWithReplySegments:
-    """TextResponse 带 reply_segments 的路径"""
+    """TextResponse 对 reply_segments 的路径测试"""
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -797,7 +845,7 @@ class TestTextResponseWithReplySegments:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["Hello!"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["Hello!"], meme=None, interested_topics=None)
             await resp._perform_send(deps)
 
             # reply_segments 应通过 += 追加到 msg
@@ -805,7 +853,7 @@ class TestTextResponseWithReplySegments:
 
 
 class TestTextResponseWithExtraSegments:
-    """TextResponse 带 extra_segments 的路径"""
+    """TextResponse 对 extra_segments 的路径测试"""
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -823,14 +871,14 @@ class TestTextResponseWithExtraSegments:
             mock_msg.__iadd__ = MagicMock(return_value=mock_msg)
             MockUniMsg.return_value = mock_msg
 
-            resp = TextResponse(confirm="ok", responses=["Hi"], meme=None, interested_topics=None)
+            resp = TextResponse(thought_of_chain="ok", responses=["Hi"], meme=None, interested_topics=None)
             await resp._perform_send(deps, extra_segments=mock_extra)
 
             mock_msg.__iadd__.assert_any_call(mock_extra)
 
 
 class TestMarkdownResponseWithReplyAndExtra:
-    """MarkdownResponse 带 reply_segments + extra_segments"""
+    """MarkdownResponse reply_segments + extra_segments"""
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -857,21 +905,21 @@ class TestMarkdownResponseWithReplyAndExtra:
             MockImage.return_value = MagicMock()
 
             resp = MarkdownResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 markdown_content="# Test",
                 summary="test",
                 interested_topics=None,
             )
             await resp._perform_send(deps, extra_segments=mock_extra)
 
-            # UniMessage() 应被调用至少 2 次 (msg1 + msg2)
+            # UniMessage() 应被调用至少 2 (msg1 + msg2)
             assert MockUniMsg.call_count >= 2
-            # send 应被调用 2 次 (msg1 发图片, msg2 发 reply+extra)
+            # send 应被调用 2 (msg1 发图 msg2 reply+extra)
             assert mock_msg.send.call_count == 2
 
 
 class TestRejectResponseWithExtraSegments:
-    """RejectResponse 带 extra_segments"""
+    """RejectResponse extra_segments"""
 
     @pytest.mark.asyncio
     @patch(f"{MODULE}.store_message_with_context", new_callable=AsyncMock)
@@ -890,7 +938,7 @@ class TestRejectResponseWithExtraSegments:
             MockUniMsg.return_value = mock_msg
 
             resp = RejectResponse(
-                confirm="ok",
+                thought_of_chain="ok",
                 reason="off topic",
                 message_to_user="Sorry",
                 interested_topics=None,
@@ -900,3 +948,4 @@ class TestRejectResponseWithExtraSegments:
             # extra_segments 应通过 += 追加
             mock_msg.__iadd__.assert_any_call(mock_extra)
             mock_msg.send.assert_called_once()
+

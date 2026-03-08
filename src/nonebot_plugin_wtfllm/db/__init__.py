@@ -13,6 +13,7 @@ __all__ = [
     "UserPersona",
     "ScheduledJob",
     "ToolCallRecordTable",
+    "ThoughtRecordTable",
     # 生命周期
     "init_db",
     "shutdown_db",
@@ -22,15 +23,23 @@ __all__ = [
     "UserPersonaRepository",
     "ScheduledJobRepository",
     "ToolCallRecordRepository",
+    "ThoughtRecordRepository",
     # Repository 单例
     "memory_item_repo",
     "user_persona_repo",
     "scheduled_job_repo",
     "tool_call_record_repo",
+    "thought_record_repo",
 ]
 
 from .engine import ENGINE, WRITE_LOCK, SESSION_MAKER
-from .models import MemoryItemTable, UserPersona, ScheduledJob, ToolCallRecordTable
+from .models import (
+    MemoryItemTable,
+    UserPersona,
+    ScheduledJob,
+    ToolCallRecordTable,
+    ThoughtRecordTable,
+)
 from .lifecycle import init_db, shutdown_db
 from .repositories import (
     BaseRepository,
@@ -38,9 +47,11 @@ from .repositories import (
     UserPersonaRepository,
     ScheduledJobRepository,
     ToolCallRecordRepository,
+    ThoughtRecordRepository,
 )
 
 memory_item_repo = MemoryItemRepository()
 user_persona_repo = UserPersonaRepository()
 scheduled_job_repo = ScheduledJobRepository()
 tool_call_record_repo = ToolCallRecordRepository()
+thought_record_repo = ThoughtRecordRepository()

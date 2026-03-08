@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from ._render import render_markdown_to_image
 from ..utils import logger, ensure_msgid_from_receipt
 from ..memory import ImageSegment
-from ..db import tool_call_record_repo
+from ..db import tool_call_record_repo, thought_record_repo
 from ..v_db import meme_repo
 from .deps import AgentDeps
 from ..proactive import topic_interest_store
@@ -20,7 +20,10 @@ from ..stream_processing import store_message_with_context
 
 
 class SendableResponse(BaseModel, ABC):
-    confirm: str = Field(..., description="确认完成准备, 比如工具调度")
+    thought_of_chain: str = Field(
+        ...,
+        description="填写本次回复前的实际思考摘要，必须真实反映你的分析与决策，但保持简短。该字段仅供系统查询，不会直接发给用户。",
+    )
     interested_topics: List[str] | None = Field(
         ...,
         description="预测用户接下来可能继续提及的主题线索列表。后续消息若与这些主题语义相关，可用于判断是否延续当前对话",
@@ -31,6 +34,7 @@ class SendableResponse(BaseModel, ABC):
         context: AgentDeps,
         extra_segments: UniMessage | None = None,
     ) -> None:
+        run_id = context.tool_chain[-1].run_id if context.tool_chain else None
         if context.tool_chain:
             try:
                 await tool_call_record_repo.save_batch_from_tool_call_info(
@@ -50,6 +54,17 @@ class SendableResponse(BaseModel, ABC):
                 )
             except (OSError, ValueError, RuntimeError, SQLAlchemyError) as e:
                 logger.error(f"Failed to persist empty tool call record: {e}")
+
+        try:
+            await thought_record_repo.save_record(
+                thought_of_chain=self.thought_of_chain,
+                agent_id=context.ids.agent_id,
+                group_id=context.ids.group_id,
+                user_id=context.ids.user_id,
+                run_id=run_id,
+            )
+        except (OSError, ValueError, RuntimeError, SQLAlchemyError) as e:
+            logger.error(f"Failed to persist thought record: {e}")
 
         results = await self._perform_send(context, extra_segments)
         if results is None:

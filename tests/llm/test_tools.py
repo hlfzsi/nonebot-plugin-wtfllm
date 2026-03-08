@@ -471,6 +471,7 @@ from nonebot_plugin_wtfllm.llm.tools.tool_group.core import (
     activate_tool_group as _activate_tool_group_wrapped,
     mark_point_of_interest as _mark_point_of_interest_wrapped,
     query_tool_call_history as _query_tool_call_history_wrapped,
+    query_thought_of_chain_history as _query_thought_of_chain_history_wrapped,
     get_full_message_detail as _get_full_message_detail_wrapped,
     query_memory as _query_memory_wrapped,
 )
@@ -479,6 +480,7 @@ _reinforce_persona_anchor = _reinforce_persona_anchor_wrapped.__wrapped__
 _activate_tool_group = _activate_tool_group_wrapped.__wrapped__
 _mark_point_of_interest = _mark_point_of_interest_wrapped.__wrapped__
 _query_tool_call_history = _query_tool_call_history_wrapped.__wrapped__
+_query_thought_of_chain_history = _query_thought_of_chain_history_wrapped.__wrapped__
 _get_full_message_detail = _get_full_message_detail_wrapped.__wrapped__
 _query_memory = _query_memory_wrapped.__wrapped__
 
@@ -683,6 +685,54 @@ class TestQueryToolCallHistory:
         ctx = _make_context()
         ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
         await _query_tool_call_history(ctx, limit=3)
+        mock_repo.get_recent.assert_called_once_with(
+            agent_id="a1", group_id=None, user_id="u1", limit=3
+        )
+
+
+class TestQueryThoughtOfChainHistory:
+    """query_thought_of_chain_history 工具测试"""
+
+    @pytest.mark.asyncio
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.thought_record_repo")
+    async def test_empty_records(self, mock_repo):
+        mock_repo.get_recent = AsyncMock(return_value=[])
+        ctx = _make_context()
+        ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
+        result = await _query_thought_of_chain_history(ctx, limit=5)
+        assert "暂无思考记录" in result
+
+    @pytest.mark.asyncio
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.thought_record_repo")
+    async def test_records(self, mock_repo):
+        record = MagicMock()
+        record.timestamp = 1700000000
+        record.thought_of_chain = "先确认需求，再回复用户"
+        mock_repo.get_recent = AsyncMock(return_value=[record])
+
+        ctx = _make_context()
+        ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
+        result = await _query_thought_of_chain_history(ctx, limit=1)
+        assert "先确认需求，再回复用户" in result
+
+    @pytest.mark.asyncio
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.thought_record_repo")
+    async def test_group_chat_passes_none_user_id(self, mock_repo):
+        mock_repo.get_recent = AsyncMock(return_value=[])
+        ctx = _make_context()
+        ctx.deps.ids = IDs(user_id="u1", agent_id="a1", group_id="g1")
+        await _query_thought_of_chain_history(ctx, limit=1)
+        mock_repo.get_recent.assert_called_once_with(
+            agent_id="a1", group_id="g1", user_id=None, limit=1
+        )
+
+    @pytest.mark.asyncio
+    @patch("nonebot_plugin_wtfllm.llm.tools.tool_group.core.thought_record_repo")
+    async def test_private_chat_passes_user_id(self, mock_repo):
+        mock_repo.get_recent = AsyncMock(return_value=[])
+        ctx = _make_context()
+        ctx.deps.ids = IDs(user_id="u1", agent_id="a1")
+        await _query_thought_of_chain_history(ctx, limit=3)
         mock_repo.get_recent.assert_called_once_with(
             agent_id="a1", group_id=None, user_id="u1", limit=3
         )
