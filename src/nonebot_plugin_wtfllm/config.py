@@ -212,6 +212,40 @@ class Config(BaseModel):
         description="质心EMA更新系数，越大越偏向最新消息 (0.3-0.7)",
     )
 
+    heat_enable: bool = Field(
+        default=True,
+        description="是否启用热度状态机，启用后智能体会根据消息频率调整主动发言概率",
+    )
+
+    heat_half_life_seconds: float = Field(
+        default=300.0,
+        description="热度状态机消息频率半衰期（秒），控制 msg_ema 衰减速度",
+    )
+    heat_activate_threshold: float = Field(
+        default=2.0,
+        description="热度激活阈值（人均消息数），达到后进入 ACTIVE 状态",
+    )
+    heat_deactivate_threshold: float = Field(
+        default=0.5,
+        description="热度去激活阈值（人均消息数），低于后进入 INACTIVE 状态",
+    )
+    heat_idle_timeout_seconds: float = Field(
+        default=30.0,
+        description="INACTIVE → IDLE 的超时时间（秒）",
+    )
+    heat_velocity_alpha: float = Field(
+        default=0.3,
+        description="热度变化速度 EMA 平滑系数，越大越偏向瞬时速度",
+    )
+    heat_base_increment: float = Field(
+        default=1.0,
+        description="每条消息的基础热度增量",
+    )
+    heat_participant_decay_threshold: float = Field(
+        default=0.1,
+        description="参与人判活的最低衰减权重，低于此值视为已离场",
+    )
+
     def model_post_init(self, __context):
         if self.huggingface_mirror_url:
             os.environ["HF_ENDPOINT"] = self.huggingface_mirror_url

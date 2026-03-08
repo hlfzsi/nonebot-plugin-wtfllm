@@ -4,10 +4,11 @@ from nonebot.adapters import Bot
 from nonebot_plugin_uninfo import Uninfo
 from nonebot_plugin_alconna import MsgId, UniMessage
 
+from .extract import convert_and_store_item
 from ..msg_tracker import msg_tracker
 from ..topic import topic_manager
+from ..proactive.states import machine_pool
 from ..utils import extract_session_info
-from .extract import convert_and_store_item
 
 if TYPE_CHECKING:
     from ..memory import MemoryItemUnion
@@ -76,5 +77,7 @@ async def store_message_with_context(
                 plain_text=plain_text,
                 related_message_id=item.related_message_id,
             )
+
+    machine_pool.feed(item=item)
 
     return item

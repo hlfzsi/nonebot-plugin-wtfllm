@@ -1,11 +1,14 @@
 import numpy as np
 import pytest
 
+from nonebot_plugin_wtfllm.config import APP_CONFIG
 from nonebot_plugin_wtfllm.proactive import should_proactively_respond
+from nonebot_plugin_wtfllm.proactive.judge import _compute_proactive_probability
 from nonebot_plugin_wtfllm.proactive.topic_interest.judgment import (
     _compute_max_similarity,
     has_topic_interest_match,
 )
+from nonebot_plugin_wtfllm.proactive.states.heat import HeatSnapshot, State
 from nonebot_plugin_wtfllm.vec import VECTORIZER
 from nonebot_plugin_wtfllm.proactive.topic_interest.store import topic_interest_store
 
@@ -228,6 +231,140 @@ class TestTopicInterestJudgment:
 
 
 class TestProactiveJudge:
+    def test_probability_is_zero_without_recent_heat(self):
+        snap = HeatSnapshot(
+            state=State.IDLE,
+            heat=0.0,
+            msg_ema=0.0,
+            n_participants=0,
+            velocity=0.0,
+            last_update=0.0,
+            state_entered_at=0.0,
+        )
+
+        assert _compute_proactive_probability(snap) == 0.0
+
+    def test_opening_phase_is_more_proactive_than_hot_chat(self):
+        activate = max(float(APP_CONFIG.heat_activate_threshold), 1e-6)
+        opening = HeatSnapshot(
+            state=State.IDLE,
+            heat=activate * 0.25,
+            msg_ema=activate * 0.25,
+            n_participants=1,
+            velocity=0.03,
+            last_update=100.0,
+            state_entered_at=0.0,
+        )
+        hot = HeatSnapshot(
+            state=State.ACTIVE,
+            heat=2.8,
+            msg_ema=8.4,
+            n_participants=3,
+            velocity=0.18,
+            last_update=100.0,
+            state_entered_at=50.0,
+        )
+        near_hot = HeatSnapshot(
+            state=State.IDLE,
+            heat=activate * 0.8,
+            msg_ema=activate * 0.8,
+            n_participants=1,
+            velocity=0.03,
+            last_update=100.0,
+            state_entered_at=0.0,
+        )
+
+        assert _compute_proactive_probability(opening) > _compute_proactive_probability(hot)
+        assert _compute_proactive_probability(opening) > _compute_proactive_probability(near_hot)
+
+    def test_cooling_phase_is_more_proactive_than_hot_chat(self):
+        cooling = HeatSnapshot(
+            state=State.INACTIVE,
+            heat=0.7,
+            msg_ema=1.4,
+            n_participants=2,
+            velocity=-0.08,
+            last_update=100.0,
+            state_entered_at=90.0,
+        )
+        hot = HeatSnapshot(
+            state=State.ACTIVE,
+            heat=2.5,
+            msg_ema=5.0,
+            n_participants=2,
+            velocity=0.12,
+            last_update=100.0,
+            state_entered_at=20.0,
+        )
+
+        assert _compute_proactive_probability(cooling) > _compute_proactive_probability(hot)
+
+    def test_falling_trend_is_more_proactive_than_rising_trend_at_same_heat(self):
+        rising = HeatSnapshot(
+            state=State.INACTIVE,
+            heat=0.9,
+            msg_ema=1.8,
+            n_participants=2,
+            velocity=0.02,
+            last_update=100.0,
+            state_entered_at=90.0,
+        )
+        falling = HeatSnapshot(
+            state=State.INACTIVE,
+            heat=0.9,
+            msg_ema=1.8,
+            n_participants=2,
+            velocity=-0.02,
+            last_update=100.0,
+            state_entered_at=90.0,
+        )
+
+        assert _compute_proactive_probability(falling) > _compute_proactive_probability(rising)
+
+    def test_inactive_negative_trend_is_more_proactive_than_idle_low_heat(self):
+        idle_cooling = HeatSnapshot(
+            state=State.IDLE,
+            heat=0.7,
+            msg_ema=0.7,
+            n_participants=1,
+            velocity=-0.03,
+            last_update=100.0,
+            state_entered_at=0.0,
+        )
+        inactive_cooling = HeatSnapshot(
+            state=State.INACTIVE,
+            heat=0.7,
+            msg_ema=0.7,
+            n_participants=1,
+            velocity=-0.03,
+            last_update=100.0,
+            state_entered_at=80.0,
+        )
+
+        assert _compute_proactive_probability(inactive_cooling) > _compute_proactive_probability(idle_cooling)
+
+    def test_more_participants_reduce_probability(self):
+        single_user = HeatSnapshot(
+            state=State.IDLE,
+            heat=0.9,
+            msg_ema=0.9,
+            n_participants=1,
+            velocity=0.02,
+            last_update=100.0,
+            state_entered_at=0.0,
+        )
+        group_chat = HeatSnapshot(
+            state=State.IDLE,
+            heat=0.9,
+            msg_ema=4.5,
+            n_participants=5,
+            velocity=0.02,
+            last_update=100.0,
+            state_entered_at=0.0,
+        )
+
+        assert _compute_proactive_probability(single_user) > _compute_proactive_probability(group_chat)
+
     @pytest.mark.asyncio
     async def test_should_proactively_respond_uses_active_interest(self):
         topic_interest_store.set_topics(
