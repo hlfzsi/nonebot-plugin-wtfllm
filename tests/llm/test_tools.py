@@ -1244,21 +1244,21 @@ class TestGetInfoWithBudget:
         assert "(2pt)" in info
 
 
-# ===================== get_image_description 测试 =====================
+# ===================== get_image_by_ocr 测试 =====================
 
 from nonebot_plugin_wtfllm.llm.tools.tool_group.core import (
-    get_image_description as _get_image_description_wrapped,
+    get_image_by_ocr as _get_image_by_ocr_wrapped,
     get_image_content as _get_image_content_wrapped,
 )
 
-_get_image_description = _get_image_description_wrapped.__wrapped__
+_get_image_by_ocr = _get_image_by_ocr_wrapped.__wrapped__
 _get_image_content = _get_image_content_wrapped.__wrapped__
 
 CORE_MODULE = "nonebot_plugin_wtfllm.llm.tools.tool_group.core"
 
 
-class TestGetImageDescription:
-    """get_image_description 工具测试"""
+class TestGetImageByOcr:
+    """get_image_by_ocr 工具测试"""
 
     def _make_ctx(self, resolve_media=None):
         ctx = _make_context()
@@ -1272,7 +1272,7 @@ class TestGetImageDescription:
     async def test_invalid_ref_format(self, mock_resched):
         """无 'IMG:' 前缀的引用"""
         ctx = self._make_ctx()
-        result = await _get_image_description(ctx, ["AUDIO:1", "FILE:2"])
+        result = await _get_image_by_ocr(ctx, ["AUDIO:1", "FILE:2"])
         assert "无效的引用格式" in result
         assert "AUDIO:1" in result
 
@@ -1281,7 +1281,7 @@ class TestGetImageDescription:
     async def test_ref_not_found(self, mock_resched):
         """resolve_media_ref 返回 None"""
         ctx = self._make_ctx(resolve_media=lambda *a: None)
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "未找到" in result
 
     @pytest.mark.asyncio
@@ -1293,7 +1293,7 @@ class TestGetImageDescription:
         mock_seg.available = True
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "一只猫的图片" in result
 
     @pytest.mark.asyncio
@@ -1305,7 +1305,7 @@ class TestGetImageDescription:
         mock_seg.available = False
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "已过期" in result
 
     @pytest.mark.asyncio
@@ -1319,7 +1319,7 @@ class TestGetImageDescription:
         mock_seg.url = None
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "无效" in result
 
     @pytest.mark.asyncio
@@ -1338,15 +1338,15 @@ class TestGetImageDescription:
         )
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "过大" in result
 
     @pytest.mark.asyncio
     @patch(f"{CORE_MODULE}.reschedule_deadline")
-    @patch(f"{CORE_MODULE}._get_image_desc", new_callable=AsyncMock)
+    @patch(f"{CORE_MODULE}._get_image_ocr_text", new_callable=AsyncMock)
     @patch(f"{CORE_MODULE}.memory_item_repo")
-    async def test_seg_with_url_success(self, mock_repo, mock_vision, mock_resched):
-        """通过 URL 获取图片描述成功 (URL ref 的 image_sources 为空时返回空 JSON)"""
+    async def test_seg_with_url_success(self, mock_repo, mock_ocr, mock_resched):
+        """通过 URL 获取图片描述成功"""
         mock_seg = MagicMock()
         mock_seg.desc = None
         mock_seg.available = True
@@ -1355,18 +1355,18 @@ class TestGetImageDescription:
         mock_seg.message_id = "m1"
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
+        mock_ocr.return_value = ["猫咪截图"]
+        mock_repo.get_many_by_message_ids = AsyncMock(return_value=[])
 
-        # URL-only ref: valid_refs 有值但 image_sources 为空,直接返回空 JSON
-        result = await _get_image_description(ctx, ["IMG:1"])
-        # 返回空 result_dict 因为 URL ref 不会被加入 image_sources
-        assert result is not None
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
+        assert "猫咪截图" in result
 
     @pytest.mark.asyncio
     @patch(f"{CORE_MODULE}.reschedule_deadline")
-    @patch(f"{CORE_MODULE}._get_image_desc", new_callable=AsyncMock)
+    @patch(f"{CORE_MODULE}._get_image_ocr_text", new_callable=AsyncMock)
     @patch(f"{CORE_MODULE}.memory_item_repo")
-    async def test_vision_returns_none(self, mock_repo, mock_vision, mock_resched):
-        """vision 模型返回 None 时 (通过 local_path 路径)"""
+    async def test_ocr_returns_none(self, mock_repo, mock_ocr, mock_resched):
+        """OCR 返回 None 时 (通过 local_path 路径)"""
         mock_seg = MagicMock()
         mock_seg.desc = None
         mock_seg.available = True
@@ -1378,10 +1378,10 @@ class TestGetImageDescription:
         )
 
         ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
-        mock_vision.return_value = None
+        mock_ocr.return_value = None
         mock_repo.get_many_by_message_ids = AsyncMock(return_value=[])
 
-        result = await _get_image_description(ctx, ["IMG:1"])
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
         assert "失败" in result
 
     @pytest.mark.asyncio
@@ -1402,23 +1402,40 @@ class TestGetImageDescription:
 
         with (
             patch(
-                f"{CORE_MODULE}._get_image_desc", new_callable=AsyncMock
-            ) as mock_vision,
+                f"{CORE_MODULE}._get_image_ocr_text", new_callable=AsyncMock
+            ) as mock_ocr,
             patch(f"{CORE_MODULE}.memory_item_repo") as mock_repo,
         ):
-            mock_desc = MagicMock()
-            mock_desc.to_string.return_value = "本地图片描述"
-            mock_vision.return_value = [mock_desc]
+            mock_ocr.return_value = ["本地图片描述"]
             mock_item = MagicMock()
             mock_item.message_id = "m1"
             mock_item.content.deep_find_and_update.return_value = False
             mock_repo.get_many_by_message_ids = AsyncMock(return_value=[mock_item])
             mock_repo.save_memory_item = AsyncMock()
 
-            result = await _get_image_description(ctx, ["IMG:1"])
+            result = await _get_image_by_ocr(ctx, ["IMG:1"])
             assert "本地图片描述" in result
             mock_seg.get_data_uri_async.assert_called_once()
             mock_repo.save_memory_item.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch(f"{CORE_MODULE}.reschedule_deadline")
+    @patch(f"{CORE_MODULE}._get_image_ocr_text", new_callable=AsyncMock)
+    @patch(f"{CORE_MODULE}.memory_item_repo")
+    async def test_ocr_returns_no_text(self, mock_repo, mock_ocr, mock_resched):
+        mock_seg = MagicMock()
+        mock_seg.desc = None
+        mock_seg.available = True
+        mock_seg.local_path = None
+        mock_seg.url = "http://example.com/cat.jpg"
+        mock_seg.message_id = "m1"
+
+        ctx = self._make_ctx(resolve_media=lambda *a: mock_seg)
+        mock_ocr.return_value = [None]
+        mock_repo.get_many_by_message_ids = AsyncMock(return_value=[])
+
+        result = await _get_image_by_ocr(ctx, ["IMG:1"])
+        assert "未识别到文字" in result
 
 
 # ===================== get_image_content 测试 =====================

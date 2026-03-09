@@ -213,7 +213,10 @@ class MediaBaseSegment(BaseSegment, ABC):
 
     def _format_content(self, ctx: "LLMContext", memory_ref: int | None = None) -> str:
         ref = ctx.ref_provider.next_media_ref(self, memory_ref)
-        return f"[{ref}{' - ' + self.desc if self.desc else ''}]"
+        desc = self.desc
+        if ctx.condense and desc:
+            desc, _ = condense_text(desc, APP_CONFIG.memory_item_max_chars)
+        return f"[{ref}{' - ' + desc if desc else ''}]"
 
 
 class UnknownSegment(BaseSegment):

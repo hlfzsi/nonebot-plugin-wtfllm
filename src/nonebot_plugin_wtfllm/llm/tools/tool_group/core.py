@@ -18,7 +18,7 @@ from ....abilities import (
     attention_router,
     PoiInfo,
     # identification,
-    get_image_desc as _get_image_desc,
+    get_image_ocr_text as _get_image_ocr_text,
 )
 
 core_group = ToolGroupMeta(
@@ -126,10 +126,9 @@ def mark_point_of_interest(
 
 
 @core_group.tool(cost=1)
-async def get_image_description(ctx: Context, media_refs: List[str]) -> str | None:
+async def get_image_by_ocr(ctx: Context, media_refs: List[str]) -> str | None:
     """
-    获取图片描述信息, 可能不精准
-
+    获取图片中的文字内容
 
     Args:
         media_refs (List[str]): 多媒体文件的引用序号, 如 ["IMG:1", "IMG:2"]
@@ -144,6 +143,7 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
     valid_refs: List[str] = []
     message_ids_to_fetch: Set[str] = set()
     result_dict: Dict[str, str] = {}
+    image_sources: List[str] = []
 
     refs_needing_uri: List[str] = []
     segs_needing_uri: List[ImageSegment] = []
@@ -174,11 +174,10 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
         elif seg.url:
             ref_to_seg[ref] = seg
             valid_refs.append(ref)
+            image_sources.append(seg.url)
             message_ids_to_fetch.add(seg.message_id)
         else:
             result_dict[ref] = "错误：图片数据无效。"
-
-    image_sources: List[str] = []
 
     if refs_needing_uri:
         uri_tasks = [seg.get_data_uri_async() for seg in segs_needing_uri]
@@ -186,13 +185,6 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
         for ref, uri in zip(refs_needing_uri, uris):
             valid_refs.append(ref)
             image_sources.append(uri)
-
-    for ref in list(ref_to_seg.keys()):
-        if ref not in valid_refs and ref in ref_to_seg:
-            seg = ref_to_seg[ref]
-            if seg.url:
-                valid_refs.append(ref)
-                image_sources.append(seg.url)
 
     if not image_sources:
         return orjson.dumps(result_dict).decode("utf-8")
@@ -202,7 +194,7 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
 
     try:
         async with asyncio.TaskGroup() as tg:
-            descs_task = tg.create_task(_get_image_desc(image_sources))
+            descs_task = tg.create_task(_get_image_ocr_text(image_sources))
             items_task = tg.create_task(
                 memory_item_repo.get_many_by_message_ids(list(message_ids_to_fetch))
             )
@@ -217,14 +209,14 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
 
     if descs is None:
         for ref in valid_refs:
-            result_dict[ref] = "错误：视觉模型调用失败。"
+            result_dict[ref] = "错误：OCR 调用失败。"
         return orjson.dumps(result_dict).decode("utf-8")
 
     memory_cache = {item.message_id: item for item in items if item.message_id}
     dirty_items = set()
 
     for ref, full_desc in zip(valid_refs, descs):
-        desc = full_desc.to_string()
+        desc = full_desc or "未识别到文字。"
         result_dict[ref] = desc
         seg = ref_to_seg[ref]
 
@@ -233,6 +225,9 @@ async def get_image_description(ctx: Context, media_refs: List[str]) -> str | No
             logger.warning(
                 f"Message {seg.message_id} not found in DB, skipping persistence."
             )
+            continue
+
+        if full_desc is None:
             continue
 
         updated = raw_memory_item.content.deep_find_and_update(seg, {"desc": desc})

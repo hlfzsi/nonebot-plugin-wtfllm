@@ -46,23 +46,7 @@ class TestCompressConfigFallback:
 
 
 @pytest.mark.property
-class TestVisionConfigReturnsNone:
-
-    @given(
-        main_key=st.text(min_size=1, max_size=20),
-        main_url=st.from_regex(r"https?://[a-z]+\.[a-z]+", fullmatch=True),
-        main_name=st.text(min_size=1, max_size=20),
-    )
-    def test_vision_none_when_fields_missing(self, main_key, main_url, main_name):
-        from nonebot_plugin_wtfllm.config import Config
-
-        cfg = Config(
-            llm_api_key=main_key,
-            llm_api_base_url=main_url,
-            llm_model_name=main_name,
-            huggingface_mirror_url="",
-        )
-        assert cfg.vision_model_config is None
+class TestImageGenerationConfigReturnsNone:
 
     @given(
         main_key=st.text(min_size=1, max_size=20),

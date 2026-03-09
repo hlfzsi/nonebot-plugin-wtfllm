@@ -120,28 +120,6 @@ class TestCompressAgentModelConfig:
 
 
 # ===========================================================================
-# vision_model_config
-# ===========================================================================
-
-
-class TestVisionModelConfig:
-    def test_none_when_fields_missing(self):
-        cfg = _make_config()
-        assert cfg.vision_model_config is None
-
-    def test_returns_config_when_set(self):
-        cfg = _make_config(
-            vision_model_name="v-model",
-            vision_model_base_url="http://vision",
-            vision_api_key="vk",
-            vision_extra_body={"x": 1},
-        )
-        mc = cfg.vision_model_config
-        assert mc is not None
-        assert mc.name == "v-model"
-
-
-# ===========================================================================
 # image_generation_model_config
 # ===========================================================================
 

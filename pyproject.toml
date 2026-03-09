@@ -36,10 +36,8 @@ dependencies = [
     "lightgbm>=4.6.0",
     "scikit-learn>=1.8.0",
     "model2vec>=0.7.0",
+    "rapidocr>=3.7.0",
 ]
-
-[project.optional-dependencies]
-dev = []
 
 [dependency-groups]
 dev = [

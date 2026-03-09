@@ -128,15 +128,6 @@ class Config(BaseModel):
         default_factory=dict, description="核心记忆压缩模型额外请求参数"
     )
 
-    vision_model_name: str | None = Field(default=None, description="视觉理解模型名称")
-    vision_model_base_url: str | None = Field(
-        default=None, description="视觉理解模型基础URL"
-    )
-    vision_api_key: str | None = Field(default=None, description="视觉理解模型API密钥")
-    vision_extra_body: dict = Field(
-        default_factory=dict, description="视觉理解模型额外请求参数"
-    )
-
     image_generation_model_name: str | None = Field(
         default=None, description="图像生成模型名称"
     )
@@ -277,18 +268,6 @@ class Config(BaseModel):
             )
         except ValidationError as e:
             raise ValueError(f"核心记忆压缩模型配置无效: {e}")
-
-    @property
-    def vision_model_config(self) -> ModelConfig | None:
-        try:
-            return ModelConfig(
-                name=self.vision_model_name,  # pyright: ignore[reportArgumentType]
-                base_url=self.vision_model_base_url,  # pyright: ignore[reportArgumentType]
-                api_key=self.vision_api_key,  # pyright: ignore[reportArgumentType]
-                extra_body=self.vision_extra_body,  # pyright: ignore[reportArgumentType]
-            )
-        except ValidationError:
-            return None
 
     @property
     def image_generation_model_config(self) -> ModelConfig | None:

@@ -2,7 +2,7 @@ __all__ = [
     "attention_router",
     "PoiInfo",
     "text_to_image",
-    "get_image_desc",
+    "get_image_ocr_text",
     # "identification",
     "modify_image_with_text",
     "combine_images",
@@ -19,7 +19,7 @@ from .image_generation import (
     modify_image_with_text,
     combine_images,
 )
-from .vision import get_image_desc
+from .ocr import get_image_ocr_text
 from .core_memory_compressor import schedule_compress
 # from ..utils import JSON_DIR
 

@@ -39,7 +39,6 @@ _mock_config.llm_model_name = "test-model"
 _mock_config.llm_role_setting = "agent"
 _mock_config.embedding_model_name = "test/model"
 _mock_config.sparse_model_name = "test/sparse"
-_mock_config.vision_model_config = None
 _mock_config.image_generation_model_config = None
 _mock_config.core_memory_max_tokens = 2048
 _mock_config.core_memory_compress_ratio = 0.6
