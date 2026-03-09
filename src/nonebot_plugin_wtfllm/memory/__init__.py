@@ -20,6 +20,8 @@ __all__ = [
     "EmojiSegment",
     "CoreMemory",
     "CoreMemoryBlock",
+    "Note",
+    "NoteBlock",
     "KnowledgeEntry",
     "KnowledgeBlock",
 ]
@@ -33,6 +35,8 @@ from .items import (
     MemoryItemUnion,
     CoreMemory,
     CoreMemoryBlock,
+    Note,
+    NoteBlock,
     KnowledgeEntry,
     KnowledgeBlock,
 )

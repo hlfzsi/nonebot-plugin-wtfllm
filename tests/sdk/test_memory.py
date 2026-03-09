@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.chain import RetrievalChain
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.main_chat import MainChatTask
+from nonebot_plugin_wtfllm.services.func.memory_retrieval.note import NoteTask
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.core_memory import (
     CoreMemoryTask,
     CrossSessionMemoryTask,
@@ -37,7 +38,7 @@ import nonebot_plugin_wtfllm.sdk.memory as sdk_memory
 class TestBuildChatRetrievalChain:
 
     def test_default_chain_has_expected_tasks(self):
-        """默认链包含 6 类检索任务"""
+        """默认链包含 7 类检索任务，其中包括 note"""
         chain = sdk_memory.build_chat_retrieval_chain(
             agent_id="agent_1",
             group_id="group_1",
@@ -46,6 +47,7 @@ class TestBuildChatRetrievalChain:
         assert isinstance(chain, RetrievalChain)
         task_types = {type(t) for t in chain}
         assert MainChatTask in task_types
+        assert NoteTask in task_types
         assert CoreMemoryTask in task_types
         assert CrossSessionMemoryTask in task_types
         assert ToolCallHistoryTask in task_types
@@ -60,7 +62,7 @@ class TestBuildChatRetrievalChain:
             query="hi",
         )
         assert isinstance(chain, RetrievalChain)
-        assert len(chain) == 6
+        assert len(chain) == 7
 
     def test_custom_params_override_defaults(self):
         """自定义参数覆盖 APP_CONFIG 的默认值"""
@@ -75,7 +77,7 @@ class TestBuildChatRetrievalChain:
             topic_max_messages=15,
         )
         # 验证 chain 接受了参数并且长度正确
-        assert len(chain) == 6
+        assert len(chain) == 7
 
         # 验证 MainChatTask 的 limit
         main_chat_tasks = [t for t in chain if isinstance(t, MainChatTask)]

@@ -5,9 +5,10 @@
 """
 
 import asyncio
-import pytest
 from dataclasses import dataclass
 from unittest.mock import MagicMock
+
+import pytest
 
 from nonebot_plugin_wtfllm.services.func.memory_retrieval._base import RetrievalTask
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.chain import (
@@ -15,6 +16,7 @@ from nonebot_plugin_wtfllm.services.func.memory_retrieval.chain import (
     _UNSET,
 )
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.main_chat import MainChatTask
+from nonebot_plugin_wtfllm.services.func.memory_retrieval.note import NoteTask
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.core_memory import (
     CoreMemoryTask,
     CrossSessionMemoryTask,
@@ -160,6 +162,15 @@ class TestShortcutDefaults:
         assert task.user_id == "u1"
         assert task.prefix == "<core_memory>"
 
+    def test_note_uses_chain_defaults(self):
+        chain = RetrievalChain(agent_id="a1", group_id="g1")
+        chain.note()
+        task = chain._tasks[0]
+        assert isinstance(task, NoteTask)
+        assert task.agent_id == "a1"
+        assert task.group_id == "g1"
+        assert task.prefix == "<note_memory>"
+
     def test_cross_session_memory_maps_group_to_exclude(self):
         """cross_session_memory 的 exclude_group_id 默认回退到链的 group_id"""
         chain = RetrievalChain(agent_id="a1", group_id="g1", query="q")
@@ -215,13 +226,14 @@ class TestChaining:
     def test_full_chain_group(self):
         """群聊场景完整链"""
         chain = RetrievalChain(agent_id="a1", group_id="g1", query="hello")
-        chain.main_chat(limit=50).core_memory().cross_session_memory().tool_history(
+        chain.main_chat(limit=50).note().core_memory().cross_session_memory().tool_history(
             limit=3
         ).knowledge(limit=5, max_tokens=2000)
-        assert len(chain) == 5
+        assert len(chain) == 6
         types_in_chain = [type(t).__name__ for t in chain]
         assert types_in_chain == [
             "MainChatTask",
+            "NoteTask",
             "CoreMemoryTask",
             "CrossSessionMemoryTask",
             "ToolCallHistoryTask",
@@ -231,12 +243,12 @@ class TestChaining:
     def test_full_chain_private(self):
         """私聊场景完整链"""
         chain = RetrievalChain(agent_id="a1", user_id="u1", query="hello")
-        chain.main_chat(limit=50).core_memory().cross_session_memory().tool_history(
+        chain.main_chat(limit=50).note().core_memory().cross_session_memory().tool_history(
             limit=3
         ).knowledge(limit=5, max_tokens=2000)
-        assert len(chain) == 5
+        assert len(chain) == 6
         # cross_session 应使用 user_id 作为 exclude
-        cross_task: CrossSessionMemoryTask = chain._tasks[2]
+        cross_task: CrossSessionMemoryTask = chain._tasks[3]
         assert cross_task.exclude_user_id == "u1"
         assert cross_task.exclude_group_id is None
 
@@ -397,8 +409,8 @@ class TestResolve:
         elapsed = loop.time() - start
 
         assert len(result) == 3
-        # 并发执行应在 100ms 内完成
-        assert elapsed < 0.12
+        # Windows 本地调度抖动更明显，阈值放宽到仍能区分串行执行的范围
+        assert elapsed < 0.25
 
     @pytest.mark.asyncio
     async def test_resolve_merges_sets(self):

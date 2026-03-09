@@ -31,8 +31,6 @@ class CoreMemoryTask(RetrievalTask):
             suffix=self.suffix,
         )
         return {block}
-
-
 @dataclass
 class CrossSessionMemoryTask(RetrievalTask):
     """跨会话核心记忆语义搜索"""

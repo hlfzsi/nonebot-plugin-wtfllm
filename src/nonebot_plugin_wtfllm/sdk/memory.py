@@ -40,7 +40,7 @@ def build_chat_retrieval_chain(
     )
     chain.main_chat(
         limit=short_memory_limit or APP_CONFIG.short_memory_max_count,
-    ).core_memory().cross_session_memory().tool_history(
+    ).note().core_memory().cross_session_memory().tool_history(
         limit=tool_history_limit or APP_CONFIG.tool_call_record_max_count,
     ).knowledge(
         limit=knowledge_limit or APP_CONFIG.knowledge_base_max_results,

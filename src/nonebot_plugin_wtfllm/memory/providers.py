@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .content.segments import BaseSegment
     from .items import MemoryItem
     from .items.core_memory import CoreMemory
+    from .items.note import Note
     from .items.knowledge_base import KnowledgeEntry
 
 T = TypeVar("T", bound="BaseSegment")
@@ -59,6 +60,12 @@ class RefProvider:
         self._core_memory_id_to_ref: Dict[str, str] = {}  # storage_id -> ref (如 'CM:1')
         self._ref_to_core_memory: Dict[str, "CoreMemory"] = {}  # ref -> CoreMemory
 
+        # Note 计数器
+        self._note_counter = count(1)
+        # Note 注册表
+        self._note_id_to_ref: Dict[str, str] = {}  # storage_id -> ref (如 'NT:1')
+        self._ref_to_note: Dict[str, "Note"] = {}  # ref -> Note
+
         # 知识库计数器
         self._knowledge_counter = count(1)
         # 知识库注册表
@@ -105,6 +112,25 @@ class RefProvider:
     def get_core_memory_by_ref(self, ref: str) -> Optional["CoreMemory"]:
         """通过引用号获取核心记忆"""
         return self._ref_to_core_memory.get(ref)
+
+    def next_note_ref(self, note: "Note") -> str:
+        """分配下一个 Note 引用号（返回如 'NT:1', 'NT:2'）。"""
+        if note.storage_id in self._note_id_to_ref:
+            return self._note_id_to_ref[note.storage_id]
+
+        ref_num = next(self._note_counter)
+        ref = f"NT:{ref_num}"
+        self._note_id_to_ref[note.storage_id] = ref
+        self._ref_to_note[ref] = note
+        return ref
+
+    def get_note_ref_by_id(self, storage_id: str) -> Optional[str]:
+        """通过 Note ID 获取引用号。"""
+        return self._note_id_to_ref.get(storage_id)
+
+    def get_note_by_ref(self, ref: str) -> Optional["Note"]:
+        """通过引用号获取 Note。"""
+        return self._ref_to_note.get(ref)
 
     def next_knowledge_ref(self, entry: "KnowledgeEntry") -> str:
         """分配下一个知识库引用号（返回如 'KB:1', 'KB:2'）"""

@@ -9,7 +9,10 @@ from nonebot_plugin_wtfllm.abilities import ocr as ocr_module
 
 class _FakeOutput:
     def __init__(self, *txts: str):
-        self.txts = txts
+        self._txts = txts
+
+    def to_markdown(self) -> str:
+        return "\n".join(self._txts)
 
 
 class _FakeEngine:
@@ -30,7 +33,8 @@ class TestGetImageOcrText:
     @pytest.mark.asyncio
     async def test_local_path_source(self, monkeypatch):
         engine = _FakeEngine()
-        monkeypatch.setattr(ocr_module, "_get_ocr_engine", lambda: engine)
+        monkeypatch.setattr(ocr_module, "OCR_ENGINE", engine)
+        monkeypatch.setattr(ocr_module, "RapidOCROutput", _FakeOutput)
 
         result = await ocr_module.get_image_ocr_text(Path("test.webp"))
 
@@ -40,7 +44,8 @@ class TestGetImageOcrText:
     @pytest.mark.asyncio
     async def test_data_uri_source(self, monkeypatch):
         engine = _FakeEngine()
-        monkeypatch.setattr(ocr_module, "_get_ocr_engine", lambda: engine)
+        monkeypatch.setattr(ocr_module, "OCR_ENGINE", engine)
+        monkeypatch.setattr(ocr_module, "RapidOCROutput", _FakeOutput)
 
         payload = base64.b64encode(b"fake-image-bytes").decode("ascii")
         data_uri = f"data:image/webp;base64,{payload}"
@@ -53,7 +58,8 @@ class TestGetImageOcrText:
     @pytest.mark.asyncio
     async def test_url_source(self, monkeypatch):
         engine = _FakeEngine()
-        monkeypatch.setattr(ocr_module, "_get_ocr_engine", lambda: engine)
+        monkeypatch.setattr(ocr_module, "OCR_ENGINE", engine)
+        monkeypatch.setattr(ocr_module, "RapidOCROutput", _FakeOutput)
         monkeypatch.setattr(
             ocr_module,
             "_fetch_url_bytes",

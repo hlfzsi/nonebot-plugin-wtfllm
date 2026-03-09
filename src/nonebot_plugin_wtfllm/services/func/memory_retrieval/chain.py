@@ -6,6 +6,7 @@ from ._base import RetrievalTask
 from ....memory.items import MemorySource
 
 from .main_chat import MainChatTask
+from .note import NoteTask
 from .core_memory import CoreMemoryTask
 from .core_memory import CrossSessionMemoryTask
 from .core_memory import EntityMemoryTask
@@ -169,6 +170,26 @@ class RetrievalChain:
         """添加当前会话核心记忆检索任务"""
         return self._add(
             CoreMemoryTask(
+                agent_id=self._d(agent_id, self.agent_id),
+                group_id=self._d(group_id, self.group_id),
+                user_id=self._d(user_id, self.user_id),
+                prefix=prefix,
+                suffix=suffix,
+            )
+        )
+
+    def note(
+        self,
+        *,
+        agent_id: str = _UNSET,
+        group_id: str | None = _UNSET,
+        user_id: str | None = _UNSET,
+        prefix: str = "<note_memory>",
+        suffix: str = "</note_memory>",
+    ) -> Self:
+        """添加当前会话短期备忘检索任务。"""
+        return self._add(
+            NoteTask(
                 agent_id=self._d(agent_id, self.agent_id),
                 group_id=self._d(group_id, self.group_id),
                 user_id=self._d(user_id, self.user_id),

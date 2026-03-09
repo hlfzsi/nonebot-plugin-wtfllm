@@ -84,7 +84,7 @@ async def handle_invoke_agent(params: InvokeAgentParams) -> None:
         )
     chain.main_chat(limit=APP_CONFIG.short_memory_max_count).recent_react(
         recent_react=recent_react, alias_provider=builder.ctx.alias_provider
-    ).core_memory()
+    ).note().core_memory()
     sources = await chain.resolve()
     builder.extend(sources)
 
@@ -96,7 +96,7 @@ async def handle_invoke_agent(params: InvokeAgentParams) -> None:
             agent_id=params.agent_id,
         ),
         context=builder,
-        active_tool_groups={"Core", "CoreMemory"},
+        active_tool_groups={"Core", "Memory"},
         nb_runtime=NonebotRuntime(bot=bot, session=session, target=target),
         tool_point_budget=APP_CONFIG.tool_point_budget,
     )

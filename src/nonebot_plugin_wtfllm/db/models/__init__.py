@@ -1,5 +1,6 @@
 __all__ = [
 	"MemoryItemTable",
+	"NoteMemoryTable",
 	"UserPersona",
 	"ScheduledJob",
 	"ToolCallRecordTable",
@@ -7,6 +8,7 @@ __all__ = [
 ]
 
 from .memory_item import MemoryItemTable
+from .note_memory import NoteMemoryTable
 from .user_persona import UserPersona
 from .scheduled_job import ScheduledJob
 from .tool_call_record import ToolCallRecordTable

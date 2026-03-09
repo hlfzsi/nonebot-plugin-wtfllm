@@ -21,6 +21,7 @@ __all__ = [
     "RetrievalTask",
     "RetrievalChain",
     "MainChatTask",
+    "NoteTask",
     "CoreMemoryTask",
     "CrossSessionMemoryTask",
     "EntityMemoryTask",
@@ -34,6 +35,7 @@ __all__ = [
 from ._base import RetrievalTask
 from .chain import RetrievalChain
 from .main_chat import MainChatTask
+from .note import NoteTask
 from .core_memory import CoreMemoryTask, CrossSessionMemoryTask, EntityMemoryTask
 from .knowledge import KnowledgeSearchTask
 from .recent_react import RecentReactTask

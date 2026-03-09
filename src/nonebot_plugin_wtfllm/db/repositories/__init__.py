@@ -6,6 +6,7 @@
 __all__ = [
     "BaseRepository",
     "MemoryItemRepository",
+    "NoteMemoryRepository",
     "UserPersonaRepository",
     "ScheduledJobRepository",
     "ToolCallRecordRepository",
@@ -14,6 +15,7 @@ __all__ = [
 
 from .base import BaseRepository
 from .memory_items import MemoryItemRepository
+from .note_memory import NoteMemoryRepository
 from .user_persona import UserPersonaRepository
 from .scheduled_job import ScheduledJobRepository
 from .tool_call_record import ToolCallRecordRepository

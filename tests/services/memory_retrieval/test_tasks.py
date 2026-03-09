@@ -4,11 +4,13 @@ Mock 仓储层，验证每个 Task 的 execute() 逻辑。
 """
 
 import time
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from nonebot_plugin_wtfllm.memory.items.storages import MemoryItemStream
 from nonebot_plugin_wtfllm.memory.items.core_memory import CoreMemoryBlock, CoreMemory
+from nonebot_plugin_wtfllm.memory.items.note import Note, NoteBlock
 from nonebot_plugin_wtfllm.memory.items.knowledge_base import (
     KnowledgeBlock,
     KnowledgeEntry,
@@ -18,6 +20,7 @@ from nonebot_plugin_wtfllm.memory.items.base_items import GroupMemoryItem
 from nonebot_plugin_wtfllm.memory.content import Message
 
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.main_chat import MainChatTask
+from nonebot_plugin_wtfllm.services.func.memory_retrieval.note import NoteTask
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.core_memory import (
     CoreMemoryTask,
     CrossSessionMemoryTask,
@@ -59,6 +62,19 @@ def _make_core_memories(n: int):
             content=f"Core memory {i}",
             agent_id="agent_1",
             group_id="group_1",
+        )
+        for i in range(n)
+    ]
+
+
+def _make_notes(n: int, expires_at: int | None = None):
+    base_expiry = expires_at or int(time.time()) + 1800
+    return [
+        Note(
+            content=f"Note {i}",
+            agent_id="agent_1",
+            group_id="group_1",
+            expires_at=base_expiry + i * 60,
         )
         for i in range(n)
     ]
@@ -170,6 +186,53 @@ class TestCoreMemoryTask:
         block = next(iter(result))
         assert block.prefix == "<custom>"
         assert block.suffix == "</custom>"
+
+
+# ── NoteTask ─────────────────────────────────────────
+
+
+NOTE_MODULE = "nonebot_plugin_wtfllm.services.func.memory_retrieval.note"
+
+
+class TestNoteTask:
+    @pytest.mark.asyncio
+    @patch(f"{NOTE_MODULE}.note_memory_repo")
+    @patch(f"{NOTE_MODULE}.time.time", return_value=1_700_000_000)
+    async def test_returns_block(self, mock_time, mock_repo):
+        notes = _make_notes(2, expires_at=1_700_001_800)
+        mock_repo.delete_expired_by_session = AsyncMock(return_value=0)
+        mock_repo.get_by_session = AsyncMock(return_value=notes)
+
+        task = NoteTask(agent_id="a1", group_id="g1")
+        result = await task.execute()
+
+        mock_repo.delete_expired_by_session.assert_awaited_once_with(
+            agent_id="a1", group_id="g1", user_id=None
+        )
+        mock_repo.get_by_session.assert_awaited_once_with(
+            agent_id="a1",
+            group_id="g1",
+            user_id=None,
+            include_expired=False,
+        )
+        assert len(result) == 1
+        block = next(iter(result))
+        assert isinstance(block, NoteBlock)
+        assert len(block.notes) == 2
+        assert block.prefix == "<note_memory>"
+
+    @pytest.mark.asyncio
+    @patch(f"{NOTE_MODULE}.note_memory_repo")
+    @patch(f"{NOTE_MODULE}.time.time", return_value=1_700_000_000)
+    async def test_filters_expired_notes(self, mock_time, mock_repo):
+        notes = _make_notes(1, expires_at=1_699_999_999)
+        mock_repo.delete_expired_by_session = AsyncMock(return_value=1)
+        mock_repo.get_by_session = AsyncMock(return_value=notes)
+
+        task = NoteTask(agent_id="a1", group_id="g1")
+        result = await task.execute()
+
+        assert result == set()
 
 
 # ── CrossSessionMemoryTask ───────────────────────────

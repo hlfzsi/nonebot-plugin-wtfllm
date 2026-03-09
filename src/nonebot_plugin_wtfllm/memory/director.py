@@ -16,6 +16,7 @@ from .utils import DirtyStateMarker
 if TYPE_CHECKING:
     from .items import MemorySource, MemoryItem
     from .items.core_memory import CoreMemory
+    from .items.note import Note
     from .items.knowledge_base import KnowledgeEntry
     from .content import BaseSegment
 
@@ -124,6 +125,13 @@ class MemoryContextBuilder:
             ref (str): 核心记忆引用ID (如 'CM:1').
         """
         return self.ctx.ref_provider.get_core_memory_by_ref(ref)
+
+    def resolve_note_ref(self, ref: str) -> Optional["Note"]:
+        """
+        Args:
+            ref (str): Note 引用ID (如 'NT:1').
+        """
+        return self.ctx.ref_provider.get_note_by_ref(ref)
 
     def resolve_knowledge_ref(self, ref: str) -> Optional["KnowledgeEntry"]:
         """

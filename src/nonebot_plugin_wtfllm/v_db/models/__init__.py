@@ -21,4 +21,9 @@ from .knowledge_base import KnowledgeBasePayload
 from .topic_archive import TopicArchivePayload
 
 
-MODELS: list[Type[VectorModel]] = [MemePayload, CoreMemoryPayload, KnowledgeBasePayload, TopicArchivePayload]
+MODELS: list[Type[VectorModel]] = [
+    MemePayload,
+    CoreMemoryPayload,
+    KnowledgeBasePayload,
+    TopicArchivePayload,
+]

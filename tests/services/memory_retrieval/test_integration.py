@@ -6,20 +6,24 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+import time
 
 from nonebot_plugin_wtfllm.memory.items import (
     MemoryItemStream,
     CoreMemoryBlock,
+    NoteBlock,
     KnowledgeBlock,
     ToolCallSummaryBlock,
 )
 from nonebot_plugin_wtfllm.memory.items.core_memory import CoreMemory
+from nonebot_plugin_wtfllm.memory.items.note import Note
 from nonebot_plugin_wtfllm.memory.items.knowledge_base import KnowledgeEntry
 from nonebot_plugin_wtfllm.memory.items.base_items import GroupMemoryItem
 from nonebot_plugin_wtfllm.memory.content import Message
 
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.chain import RetrievalChain
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.main_chat import MainChatTask
+from nonebot_plugin_wtfllm.services.func.memory_retrieval.note import NoteTask
 from nonebot_plugin_wtfllm.services.func.memory_retrieval.core_memory import (
     CoreMemoryTask,
     CrossSessionMemoryTask,
@@ -38,6 +42,7 @@ from nonebot_plugin_wtfllm.services.func.memory_retrieval.recent_react import (
 # ── patch 路径 ────────────────────────────────────────
 
 _MAIN = "nonebot_plugin_wtfllm.services.func.memory_retrieval.main_chat"
+_NOTE = "nonebot_plugin_wtfllm.services.func.memory_retrieval.note"
 _CORE = "nonebot_plugin_wtfllm.services.func.memory_retrieval.core_memory"
 _KNOW = "nonebot_plugin_wtfllm.services.func.memory_retrieval.knowledge"
 _TOOL = "nonebot_plugin_wtfllm.services.func.memory_retrieval.tool_history"
@@ -71,6 +76,19 @@ def _core_mems(n: int):
     ]
 
 
+def _notes(n: int, expires_at: int | None = None):
+    base_expiry = expires_at or int(time.time()) + 1800
+    return [
+        Note(
+            content=f"note_{i}",
+            agent_id="agent_1",
+            group_id="group_1",
+            expires_at=base_expiry + i * 60,
+        )
+        for i in range(n)
+    ]
+
+
 def _know_entries(n: int, tokens: int = 50):
     return [
         KnowledgeEntry(
@@ -93,11 +111,14 @@ class TestGroupChatIntegration:
     @patch(f"{_TOOL}.tool_call_record_repo")
     @patch(f"{_KNOW}.knowledge_base_repo")
     @patch(f"{_CORE}.core_memory_repo")
+    @patch(f"{_NOTE}.note_memory_repo")
     @patch(f"{_MAIN}.memory_item_repo")
     async def test_full_chain(
-        self, mock_mem, mock_core, mock_know, mock_tool
+        self, mock_mem, mock_note, mock_core, mock_know, mock_tool
     ):
         mock_mem.get_by_group = AsyncMock(return_value=_items(5))
+        mock_note.delete_expired_by_session = AsyncMock(return_value=0)
+        mock_note.get_by_session = AsyncMock(return_value=_notes(2))
         mock_core.get_by_session = AsyncMock(return_value=_core_mems(3))
         mock_know.search_relevant = AsyncMock(
             return_value=[MagicMock(item=e) for e in _know_entries(2)]
@@ -109,20 +130,38 @@ class TestGroupChatIntegration:
         sources = await (
             RetrievalChain(agent_id="agent_1", group_id="group_1", query="hello")
             .main_chat(limit=50)
+            .note()
             .core_memory()
             .knowledge()
             .tool_history()
             .resolve()
         )
 
-        # 4 个 Task → 4 个 MemorySource
-        assert len(sources) == 4
+        # 5 个 Task → 5 个 MemorySource
+        assert len(sources) == 5
 
         types_found = {type(s) for s in sources}
         assert MemoryItemStream in types_found
+        assert NoteBlock in types_found
         assert CoreMemoryBlock in types_found
         assert KnowledgeBlock in types_found
         assert ToolCallSummaryBlock in types_found
+
+    @pytest.mark.asyncio
+    @patch(f"{_NOTE}.time.time", return_value=1_700_000_000)
+    @patch(f"{_NOTE}.note_memory_repo")
+    async def test_note_only_chain(self, mock_note, mock_time):
+        mock_note.delete_expired_by_session = AsyncMock(return_value=0)
+        mock_note.get_by_session = AsyncMock(
+            return_value=_notes(1, expires_at=1_700_001_800)
+        )
+
+        sources = await RetrievalChain(agent_id="agent_1", group_id="group_1").note().resolve()
+
+        assert len(sources) == 1
+        block = next(iter(sources))
+        assert isinstance(block, NoteBlock)
+        assert block.notes[0].content == "note_0"
 
     @pytest.mark.asyncio
     @patch(f"{_TOOL}.tool_call_record_repo")
@@ -154,9 +193,21 @@ class TestPrivateChatIntegration:
     @pytest.mark.asyncio
     @patch(f"{_TOOL}.tool_call_record_repo")
     @patch(f"{_CORE}.core_memory_repo")
+    @patch(f"{_NOTE}.note_memory_repo")
     @patch(f"{_MAIN}.memory_item_repo")
-    async def test_private_chain(self, mock_mem, mock_core, mock_tool):
+    async def test_private_chain(self, mock_mem, mock_note, mock_core, mock_tool):
         mock_mem.get_in_private_by_user = AsyncMock(return_value=_items(2))
+        mock_note.delete_expired_by_session = AsyncMock(return_value=0)
+        mock_note.get_by_session = AsyncMock(
+            return_value=[
+                Note(
+                    content="private_note",
+                    agent_id="agent_1",
+                    user_id="user_1",
+                    expires_at=int(time.time()) + 1800,
+                )
+            ]
+        )
         mock_core.get_by_session = AsyncMock(return_value=_core_mems(1))
         mock_tool.get_recent = AsyncMock(
             return_value=[MagicMock(tool_name="search")]
@@ -165,12 +216,14 @@ class TestPrivateChatIntegration:
         sources = await (
             RetrievalChain(agent_id="agent_1", user_id="user_1")
             .main_chat()
+            .note()
             .core_memory()
             .tool_history()
             .resolve()
         )
 
-        assert len(sources) == 3
+        assert len(sources) == 4
+        assert NoteBlock in {type(s) for s in sources}
 
         # 确认调用了私聊接口
         mock_mem.get_in_private_by_user.assert_awaited_once()

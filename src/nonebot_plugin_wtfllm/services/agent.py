@@ -130,7 +130,7 @@ async def handle(
 
         chain.main_chat(
             limit=APP_CONFIG.short_memory_max_count,
-        ).core_memory().cross_session_memory().knowledge(
+        ).note().core_memory().cross_session_memory().knowledge(
             limit=APP_CONFIG.knowledge_base_max_results,
             max_tokens=APP_CONFIG.knowledge_base_max_tokens,
         ).recent_react(
@@ -153,7 +153,7 @@ async def handle(
                 agent_id=agent_id,
             ),
             context=builder,
-            active_tool_groups={"Core", "CoreMemory"},
+            active_tool_groups={"Core", "Memory"},
             nb_runtime=NonebotRuntime(bot=bot, session=session, target=target),
             message_queue=queue,
             tool_point_budget=APP_CONFIG.tool_point_budget,

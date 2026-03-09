@@ -3,6 +3,7 @@
 import pytest
 
 from nonebot_plugin_wtfllm.memory.director import MemoryContextBuilder
+from nonebot_plugin_wtfllm.memory.items.note import Note
 from nonebot_plugin_wtfllm.memory.items.storages import MemoryItemStream
 from nonebot_plugin_wtfllm.memory.content.segments import ImageSegment
 
@@ -87,6 +88,22 @@ class TestMemoryContextBuilderPipeline:
 
         # 自定义别名应出现在输出中
         assert "Alice" in prompt or "Bob" in prompt
+
+    def test_resolve_note_ref_after_render(self):
+        note = Note.create(
+            content="提醒：这一轮会话结束前给出总结",
+            agent_id="agent_bot",
+            user_id="user_1",
+            expires_at=4102444800,
+        )
+        builder = MemoryContextBuilder(agent_id="agent_bot")
+        builder.add(note)
+        prompt = builder.to_prompt()
+
+        assert "NT:" in prompt
+        resolved = builder.resolve_note_ref("NT:1")
+        assert resolved is not None
+        assert resolved.content.startswith("提醒")
 
     def test_prefix_and_suffix_prompt(self, memory_stream):
         builder = MemoryContextBuilder(
