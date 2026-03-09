@@ -12,7 +12,13 @@ _让 Agent 记得人、记得事、记得语境，并且成本可控_
 
 **nonebot-plugin-wtfllm** 是一个面向 NoneBot2 的 Agent 插件。它为你的 Bot 提供多层记忆、多模态理解、工具自主调度等能力——开箱即用，配置即走。
 
-_DeepSeek官方API，单次请求不超过5k输入token；同一会话连续请求缓存命中率达95%_
+<div align="center">
+
+_(DeepSeek官方API，标准长度人设) 单次请求不超过5k输入token；同一会话连续请求缓存命中率达95%_
+
+_200余次请求，成本仅0.3元人民币_
+
+</div>
 
 ## 为什么是 WtfLLM
 
@@ -61,19 +67,17 @@ plugins = ["nonebot_plugin_wtfllm"]
 nb plugin install nonebot_plugin_wtfllm
 ```
 
-
 向量数据库使用 Qdrant，已内置**自动部署**，首次启动时会自动下载嵌入模型。
+
+图片文字提取使用本地 RapidOCR 执行；若主模型本身支持视觉输入，可再通过 `llm_support_vision=true` 开启图片内容直读能力。
 
 ### 环境要求
 
-
-| 项目 | 要求                                                        |
-| ---- | ----------------------------------------------------------- |
-| CPU  | 至少双核，推荐四核以上                                      |
-| 网络 | 需要稳定连接，首次启动开销大                                |
-| 磁盘 | 建议 ≥ 4 GB 可用                                           |
-| 内存 | 建议 ≥ 700 MB 可用                                         |
-| 系统 | `Windows >= 10.0.19041` / `glibc >= 2.28` / `macOS >= 14.0` |
+- CPU：至少双核，推荐四核以上
+- 网络：需要稳定连接，首次启动开销大
+- 磁盘：建议 ≥ 4 GB 可用
+- 内存：建议 ≥ 700 MB 可用
+- 系统：`Windows >= 10.0.19041` / `glibc >= 2.28` / `macOS >= 14.0`
 
 > [!TIP]
 > 国内网络环境下，Qdrant 二进制下载已内置 GitHub 代理加速；嵌入模型默认走 `hf-mirror.com` 镜像，可通过 `huggingface_mirror_url` 配置项自定义。
@@ -82,12 +86,11 @@ nb plugin install nonebot_plugin_wtfllm
 
 在 NoneBot2 的 `.env` 文件中配置以下项目：
 
-配置项较多，最关键的是**必填配置**与按需启用的**独立模型**配置。
+配置项较多，最关键的是**必填配置**、建议优先完成的**身份与人设配置**，以及按需启用的**独立模型**配置。
 
 本项目的模型接口均按 OpenAI 兼容格式调用。
 
 ### 必填配置
-
 
 | 配置项             | 类型  | 说明             |
 | ------------------ | ----- | ---------------- |
@@ -95,20 +98,25 @@ nb plugin install nonebot_plugin_wtfllm
 | `llm_api_base_url` | `str` | LLM API 基础 URL |
 | `llm_model_name`   | `str` | LLM 模型名称     |
 
-### 可选配置 — 基础
+### 建议首配 — 身份与人设
 
+这两项不是运行所必需，但通常建议在首次接入时一并设置，否则会分别回退到默认机器人名与空人设。
+
+| 配置项             | 类型  | 默认值 | 说明                    |
+| ------------------ | ----- | ------ | ----------------------- |
+| `bot_name`         | `str` | `"小W"` | 机器人名称              |
+| `llm_role_setting` | `str` | `""` | 主 Agent 的角色/人设设定 |
+
+### 可选配置 — 基础
 
 | 配置项                  | 类型        | 默认值  | 说明                      |
 | ----------------------- | ----------- | ------- | ------------------------- |
-| `bot_name`              | `str`       | `"小W"` | 机器人名称                |
-| `llm_role_setting`      | `str`       | `""`    | LLM 角色设定              |
 | `llm_extra_body`        | `dict`      | `{}`    | LLM 额外请求参数          |
 | `llm_support_vision`    | `bool`      | `false` | 主 Agent 是否具备视觉能力 |
 | `llm_use_responses_api` | `bool`      | `false` | 是否使用 Response API     |
 | `superusers`            | `list[str]` | `[]`    | 管理员用户 ID 列表        |
 
 ### 可选配置 — 记忆系统
-
 
 | 配置项                       | 类型    | 默认值 | 说明                                             |
 | ---------------------------- | ------- | ------ | ------------------------------------------------ |
@@ -121,7 +129,6 @@ nb plugin install nonebot_plugin_wtfllm
 
 ### 可选配置 — Agent 行为
 
-
 | 配置项                       | 类型  | 默认值 | 说明                       |
 | ---------------------------- | ----- | ------ | -------------------------- |
 | `agent_base_timeout_seconds` | `int` | `45`   | Agent 基础超时（秒）       |
@@ -131,30 +138,41 @@ nb plugin install nonebot_plugin_wtfllm
 
 ### 可选配置 — 话题系统（Topic）
 
+| 配置项                       | 类型    | 默认值 | 说明                                         |
+| ---------------------------- | ------- | ------ | -------------------------------------------- |
+| `topic_cluster_threshold`    | `float` | `0.70` | 话题聚类余弦相似度阈值                       |
+| `topic_max_clusters`         | `int`   | `15`   | 每个会话最大活跃话题数                       |
+| `topic_decay_minutes`        | `int`   | `30`   | 话题不活跃超过此时间后清理（分钟）           |
+| `topic_max_context_messages` | `int`   | `5`    | 话题上下文检索最大消息数                     |
+| `topic_archive_min_messages` | `int`   | `5`    | 簇消息数达到该值才归档到长期记忆             |
+| `topic_archive_mmr_k`        | `int`   | `5`    | MMR 选取代表消息条数                         |
+| `topic_archive_mmr_lambda`   | `float` | `0.5`  | MMR relevance-diversity 权衡系数             |
+| `topic_centroid_ema_alpha`   | `float` | `0.5`  | 话题质心 EMA 更新系数，越大越偏向最新消息    |
 
-| 配置项                       | 类型    | 默认值 | 说明                               |
-| ---------------------------- | ------- | ------ | ---------------------------------- |
-| `topic_cluster_threshold`    | `float` | `0.70` | 话题聚类余弦相似度阈值             |
-| `topic_max_clusters`         | `int`   | `15`   | 每个会话最大活跃话题数             |
-| `topic_decay_minutes`        | `int`   | `30`   | 话题不活跃超过此时间后清理（分钟） |
-| `topic_max_context_messages` | `int`   | `5`    | 话题上下文检索最大消息数           |
-| `topic_archive_min_messages` | `int`   | `5`    | 簇消息数达到该值才归档到长期记忆   |
-| `topic_archive_mmr_k`        | `int`   | `5`    | MMR 选取代表消息条数               |
-| `topic_archive_mmr_lambda`   | `float` | `0.5`  | MMR relevance-diversity 权衡系数   |
+### 可选配置 — 主动触达
+
+| 配置项                             | 类型    | 默认值  | 说明                                           |
+| ---------------------------------- | ------- | ------- | ---------------------------------------------- |
+| `heat_enable`                      | `bool`  | `true`  | 是否启用热度状态机主动触达                     |
+| `heat_half_life_seconds`           | `float` | `300.0` | 消息频率半衰期（秒），控制热度衰减速度         |
+| `heat_activate_threshold`          | `float` | `2.0`   | 热度激活阈值，达到后进入活跃状态               |
+| `heat_deactivate_threshold`        | `float` | `0.5`   | 热度去激活阈值，低于后退出活跃状态             |
+| `heat_idle_timeout_seconds`        | `float` | `30.0`  | 低活跃状态回落为空闲状态的超时时间（秒）       |
+| `heat_velocity_alpha`              | `float` | `0.3`   | 热度变化速度 EMA 平滑系数                      |
+| `heat_base_increment`              | `float` | `1.0`   | 每条消息的基础热度增量                         |
+| `heat_participant_decay_threshold` | `float` | `0.1`   | 参与者判活阈值，低于该衰减权重视为已离场       |
 
 ### 可选配置 — 独立模型
 
-视觉理解、图像生成、记忆压缩可配置独立模型。未配置时回退到主模型或禁用对应功能。
-
+图像生成、记忆压缩可配置独立模型。未配置时回退到主模型或禁用对应功能。
+图片文字识别使用本地 RapidOCR；若需让 Agent 直接消费图片内容，请开启主模型的 `llm_support_vision`。
 
 | 配置项                                                                                                                         | 说明         |
 | ------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| `vision_model_name` / `vision_model_base_url` / `vision_api_key` / `vision_extra_body`                                         | 视觉理解模型 |
 | `image_generation_model_name` / `image_generation_model_base_url` / `image_generation_api_key` / `image_generation_extra_body` | 图像生成模型 |
 | `compress_model_name` / `compress_api_base_url` / `compress_api_key` / `compress_extra_body`                                   | 记忆压缩模型 |
 
 ### 可选配置 — 其他
-
 
 | 配置项                   | 类型            | 默认值                     | 说明                                                      |
 | ------------------------ | --------------- | -------------------------- | --------------------------------------------------------- |
@@ -174,51 +192,58 @@ llm_api_key="YOUR_API_KEY"
 llm_api_base_url="https://api.openai.com/v1"
 llm_model_name="gpt-4o-mini"
 
+# 建议首配：机器人名称与人设
 bot_name="小W"
+llm_role_setting="你是群里的 Bot 助手，说话简洁，优先结合上下文与记忆回答。"
+
 tool_point_budget=3
 short_memory_max_count=10
 
-# 可选：启用视觉模型
-vision_model_name="gpt-4.1-mini"
-vision_model_base_url="https://api.openai.com/v1"
-vision_api_key="YOUR_API_KEY"
+# 可选：主模型支持图片直读时开启
+llm_support_vision=true
+
+# 可选：启用独立图像生成模型
+image_generation_model_name="gpt-image-1"
+image_generation_model_base_url="https://api.openai.com/v1"
+image_generation_api_key="YOUR_API_KEY"
 ```
 
 ## 使用
 
-@Bot 与 Bot 对话。Bot 会自动管理记忆、调用工具并生成回复。在某些情况下，Bot 也可能响应未 @ 的消息，但这是一类伪主动策略。 我们正在积极探索和引入**不基于**LLM对上下文理解的主动触达能力。
+@Bot 与 Bot 对话。Bot 会自动管理记忆、调用工具并生成回复。
+
+在部分情况下，Bot 也可能响应未 @ 的消息：
+
+- 当上一轮回复里记录的 `interested_topics` 与后续消息语义命中时，会延续对话。
+- 当会话热度状态机判断当前处于适合插话的时机时，会以低概率主动接话。
 
 ### 管理指令
 
 以下指令需要配置 `superusers` 后由管理员使用，均需添加命令前缀（默认 `/`）。
 
-
-| 指令                            | 别名                       | 说明                                 |
-| ------------------------------- | -------------------------- | ------------------------------------ |
-| `/easyban user add <用户ID>`    | `/eb`、`/ban`              | 将用户加入黑名单                     |
-| `/easyban user remove <用户ID>` | —                         | 将用户移出黑名单                     |
-| `/easyban user list`            | —                         | 查看黑名单用户列表                   |
-| `/easyban group add [群号]`     | —                         | 将群加入黑名单（群内使用可省略群号） |
-| `/easyban group remove [群号]`  | —                         | 将群移出黑名单                       |
-| `/easyban group list`           | —                         | 查看黑名单群列表                     |
-| `/delete_media [-d 天数]`       | `/del`、`/delete`、`/删除` | 清理过期媒体文件                     |
+| 指令                            | 别名                         | 说明                                 |
+| ------------------------------- | ---------------------------- | ------------------------------------ |
+| `/easyban user add <用户ID>`    | `/eb`、`/ban`                | 将用户加入黑名单                     |
+| `/easyban user remove <用户ID>` | —                            | 将用户移出黑名单                     |
+| `/easyban user list`            | —                            | 查看黑名单用户列表                   |
+| `/easyban group add [群号]`     | —                            | 将群加入黑名单（群内使用可省略群号） |
+| `/easyban group remove [群号]`  | —                            | 将群移出黑名单                       |
+| `/easyban group list`           | —                            | 查看黑名单群列表                     |
+| `/delete_media [-d 天数]`       | `/del`、`/delete`、`/删除`   | 清理过期媒体文件                     |
 
 ### 工具一览
 
 工具由 Agent 自主调度，无需用户手动触发。
 
-
-| 工具组              | 说明                                                 | 工具数 | 单次消耗 | 激活方式           |
-| ------------------- | ---------------------------------------------------- | -----: | -------- | ------------------ |
-| **Core**            | 人设锚定、图片理解、记忆查询、历史消息加载等基础能力 |     10 | 0–2 pt  | 常驻               |
-| **Chat**            | 发送中间消息、主动提问并等待回复                     |      2 | -1 pt    | 常驻               |
-| **CoreMemory**      | 新增、更新、删除核心记忆                             |      3 | 0–1 pt  | 常驻               |
-| **KnowledgeBase**   | 新增、更新、删除全局知识库条目                       |      3 | 0–1 pt  | 常驻               |
-| **Memes**           | 保存、搜索、列出表情包                               |      3 | 0 pt     | 常驻               |
-| **UserPersona**     | 获取与更新用户画像                                   |      2 | 0 pt     | 常驻               |
-| **WebSearch**       | 关键词搜索、网页正文提取                             |      2 | 2 pt     | 常驻               |
-| **ImageGeneration** | 文生图、图生图、多图合成                             |      3 | 4 pt     | 需配置图像生成模型 |
-| **ScheduleMessage** | 定时消息、定时 Agent 任务创建与管理                  |      4 | 0-3 pt   | 常驻               |
+- **Core**：人设锚定、OCR、图片内容获取、记忆查询、历史消息与记录回溯等基础能力；10 个工具；0–2 pt；常驻。
+- **Chat**：发送中间消息、主动提问并等待回复；2 个工具；-2 pt；常驻。
+- **Memory**：统一管理核心记忆与会话级短期备忘；1 个工具；1 pt；常驻。
+- **KnowledgeBase**：新增、更新、删除全局知识库条目；3 个工具；0–1 pt；常驻。
+- **Memes**：保存、搜索、列出表情包；3 个工具；0 pt；常驻。
+- **UserPersona**：获取与更新用户画像；2 个工具；0 pt；常驻。
+- **WebSearch**：关键词搜索、网页正文提取；2 个工具；2 pt；常驻。
+- **ImageGeneration**：文生图、图生图、多图合成；3 个工具；4 pt；需配置图像生成模型。
+- **ScheduleMessage**：定时消息、定时 Agent 任务创建与管理；4 个工具；0-3 pt；常驻。
 
 > **工具点数预算**：每轮对话有 `tool_point_budget`（默认 3）个点数。Agent 每调用一个工具就扣除对应 pt；当预算不足时会收到警告并尽快给出最终回复。设为 `0` 可关闭预算限制。
 
