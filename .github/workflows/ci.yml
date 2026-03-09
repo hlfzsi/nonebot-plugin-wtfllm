@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "nonebot_plugin_wtfllm/**"
+      - "src/nonebot_plugin_wtfllm/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -12,7 +12,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "nonebot_plugin_wtfllm/**"
+      - "src/nonebot_plugin_wtfllm/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
