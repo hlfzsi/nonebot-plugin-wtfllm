@@ -33,5 +33,11 @@ class MainChatTask(RetrievalTask):
         else:
             return set()
 
-        stream = MemoryItemStream.create(items=items, role="main_chat", priority=0.1)
+        stream = MemoryItemStream.create(
+            items=items,
+            role="main_chat",
+            prefix="<current_chat>",
+            suffix="</current_chat>",
+            priority=0.1,
+        )
         return {stream}
